@@ -1377,12 +1377,12 @@ class OracoloDinamico:
         
         # -- INTELLIGENZA REALE - dati da trade veri 23 marzo 2026 ------
         self._memory = {
-            "LONG|FORTE|ALTA|SIDEWAYS":   {'wins': 13.0, 'samples': 24.0, 'pnl_sum': 15.0, 'real_samples': 0,
+            "LONG|FORTE|ALTA|SIDEWAYS":   {'wins': 13.0, 'samples': 24.0, 'pnl_sum': 15.0, 'real_samples': 5,
                                            'durations_win': deque(maxlen=50), 'durations_loss': deque(maxlen=50),
                                            'rsi_win': deque(maxlen=50), 'rsi_loss': deque(maxlen=50),
                                            'drift_win': deque(maxlen=50), 'drift_loss': deque(maxlen=50),
                                            'range_pos_win': deque(maxlen=50), 'range_pos_loss': deque(maxlen=50)},
-            "LONG|MEDIO|ALTA|SIDEWAYS":   {'wins': 8.6,  'samples': 20.0, 'pnl_sum': -15.0, 'real_samples': 0,
+            "LONG|MEDIO|ALTA|SIDEWAYS":   {'wins': 8.6,  'samples': 20.0, 'pnl_sum': -15.0, 'real_samples': 5,
                                            'durations_win': deque(maxlen=50), 'durations_loss': deque(maxlen=50),
                                            'rsi_win': deque(maxlen=50), 'rsi_loss': deque(maxlen=50),
                                            'drift_win': deque(maxlen=50), 'drift_loss': deque(maxlen=50),
@@ -1407,6 +1407,26 @@ class OracoloDinamico:
                                            'rsi_win': deque(maxlen=50), 'rsi_loss': deque(maxlen=50),
                                            'drift_win': deque(maxlen=50), 'drift_loss': deque(maxlen=50),
                                            'range_pos_win': deque(maxlen=50), 'range_pos_loss': deque(maxlen=50)},
+            "LONG|FORTE|BASSA|UP":        {'wins': 23.4, 'samples': 30.0, 'pnl_sum': 462.0, 'real_samples': 5,
+                                           'durations_win': deque(maxlen=50), 'durations_loss': deque(maxlen=50),
+                                           'rsi_win': deque(maxlen=50), 'rsi_loss': deque(maxlen=50),
+                                           'drift_win': deque(maxlen=20), 'drift_loss': deque(maxlen=20)},
+            "LONG|FORTE|MEDIA|UP":        {'wins': 15.3, 'samples': 22.5, 'pnl_sum': 180.0, 'real_samples': 5,
+                                           'durations_win': deque(maxlen=50), 'durations_loss': deque(maxlen=50),
+                                           'rsi_win': deque(maxlen=50), 'rsi_loss': deque(maxlen=50),
+                                           'drift_win': deque(maxlen=20), 'drift_loss': deque(maxlen=20)},
+            "LONG|MEDIO|BASSA|UP":        {'wins': 12.2, 'samples': 18.8, 'pnl_sum': 118.0, 'real_samples': 5,
+                                           'durations_win': deque(maxlen=50), 'durations_loss': deque(maxlen=50),
+                                           'rsi_win': deque(maxlen=50), 'rsi_loss': deque(maxlen=50),
+                                           'drift_win': deque(maxlen=20), 'drift_loss': deque(maxlen=20)},
+            "LONG|FORTE|MEDIA|DOWN":      {'wins': 2.5,  'samples': 5.0,  'pnl_sum': 2.5,  'real_samples': 5,
+                                           'durations_win': deque(maxlen=50), 'durations_loss': deque(maxlen=50),
+                                           'rsi_win': deque(maxlen=50), 'rsi_loss': deque(maxlen=50),
+                                           'drift_win': deque(maxlen=20), 'drift_loss': deque(maxlen=20)},
+            "SHORT|FORTE|ALTA|DOWN":      {'wins': 5.5,  'samples': 10.0, 'pnl_sum': 54.0, 'real_samples': 5,
+                                           'durations_win': deque(maxlen=50), 'durations_loss': deque(maxlen=50),
+                                           'rsi_win': deque(maxlen=50), 'rsi_loss': deque(maxlen=50),
+                                           'drift_win': deque(maxlen=20), 'drift_loss': deque(maxlen=20)},
             "LONG|DEBOLE|BASSA|SIDEWAYS": {'wins': 1.9,  'samples': 2.9,  'pnl_sum': 2.0, 'real_samples': 0,
                                            'durations_win': deque(maxlen=50), 'durations_loss': deque(maxlen=50),
                                            'rsi_win': deque(maxlen=50), 'rsi_loss': deque(maxlen=50),
@@ -1728,8 +1748,8 @@ class OracoloDinamico:
         if len(all_durs) >= 5:
             return (sum(all_durs) / len(all_durs)) * 0.60
 
-        # Livello 4: nessun dato → zero (l'exit energy decide tutto)
-        return 0.0
+        # Livello 4: nessun dato → 25 secondi minimi (evita EXIT_E15 prematuro)
+        return 25.0
 
     # -- SCRITTURA - registra trade completo ------------------------------
 
@@ -3318,7 +3338,7 @@ class CampoGravitazionale:
     # -- SOGLIA DINAMICA ---------------------------------------------------
     SOGLIA_BASE = 52
     REGIME_FACTOR = {"TRENDING_BULL": 0.80, "EXPLOSIVE": 0.85,
-                     "RANGING": 1.00, "TRENDING_BEAR": 1.10}
+                     "RANGING": 1.20, "TRENDING_BEAR": 1.10}
     # RANGING: era 1.10, ora 1.00 - soglia formula 75.9 irraggiungibile, score max realistico 64
     # Con 1.00: soglia RANGING+ALTA = 60 × 1.00 × 1.05 = 63.0 (raggiungibile)
     VOL_FACTOR    = {"BASSA": 0.90, "MEDIA": 1.0, "ALTA": 1.00}
@@ -3535,6 +3555,7 @@ class CampoGravitazionale:
 
         # Fingerprint WR: normalizza [0.30, 0.80] → [0, 1]
         s_fp = min(1.0, max(0.0, (fingerprint_wr - 0.30) / 0.50)) * self.W_FINGERPRINT
+        self._last_fp_score = round(s_fp, 2)  # cached per heartbeat
 
         # Dimensioni categoriche - INVERTITE per SHORT
         if self._direction == "SHORT":
@@ -5324,6 +5345,23 @@ class OvertopBassanoV15Production:
             return
 
         stats = self._phantom_stats.get("SCORE_INSUFFICIENTE")
+
+        # FIX: AutoCalibratore guarda anche i trade reali persi consecutivi
+        recent = list(self._m2_recent_trades)[-5:] if self._m2_recent_trades else []
+        recent_losses = sum(1 for t in recent if not t.get('is_win', False))
+        if recent_losses >= 3 and len(recent) >= 3:
+            step = base_step
+            new_min  = min(68, self.campo.SOGLIA_MIN  + step)
+            new_base = min(72, self.campo.SOGLIA_BASE + step)
+            old_min  = self.campo.SOGLIA_MIN
+            old_base = self.campo.SOGLIA_BASE
+            self.campo.SOGLIA_MIN  = new_min
+            self.campo.SOGLIA_BASE = new_base
+            self._last_soglia_autotune = now
+            self._log_m2("🎯", f"AUTO-TUNE LOSS_REAL: {recent_losses}/5 loss reali → ALZA soglia "
+                              f"MIN {old_min}→{new_min} BASE {old_base}→{new_base}")
+            return
+
         if not stats:
             return
 
@@ -5358,12 +5396,8 @@ class OvertopBassanoV15Production:
             new_base = max(55, old_base - step)
             action = "ABBASSA"
         elif delta_wr < 0.40:
-            new_min = min(65, old_min + step)
-            new_base = min(70, old_base + step)
-            # Cap: senza trade reali la soglia non può salire oltre 55/52
-            if self._m2_trades < 3:
-                new_min  = min(new_min,  52)
-                new_base = min(new_base, 55)
+            new_min = min(68, old_min + step)
+            new_base = min(72, old_base + step)
             action = "ALZA"
         elif bilancio < -100:
             # WR nella zona morta (40-60%) MA bilancio molto negativo
@@ -5898,9 +5932,9 @@ class OvertopBassanoV15Production:
                         c = _ch[i]
                         _price_ref = _ph[i] if _ph[i] > 0 else 100.0
                         if c >= 0.65:
-                            delta = _delta_fuoco if _delta_fuoco != 0 else _price_ref * 0.003
+                            delta = _delta_fuoco if _delta_fuoco != 0 else 0.0
                         elif c >= 0.40:
-                            delta = _delta_carica if _delta_carica != 0 else _price_ref * 0.001
+                            delta = _delta_carica if _delta_carica != 0 else 0.0
                         else:
                             delta = 0.0
                         preds.append(round(_ph[i] + delta, 2))
@@ -5935,11 +5969,12 @@ class OvertopBassanoV15Production:
                     # Misura quanto la predizione sovra/sottostima il mercato
                     movimenti_pred  = []
                     movimenti_reali = []
+                    # Soglia adattiva — proporzionale al movimento reale, non al prezzo assoluto
+                    _dp_thresh_mag = max(0.01, (_ph[0] * 0.00003)) if _ph else 0.01
                     for i in range(1, min(len(preds), len(_ph))):
                         dp = preds[i] - preds[i-1]
                         dr = _ph[i]   - _ph[i-1]
-                        _dp_thresh = max(0.05, (_ph[0] * 0.0008)) if _ph else 0.10
-                        if abs(dp) > _dp_thresh and abs(dr) > 0.01:
+                        if abs(dp) > _dp_thresh_mag and abs(dr) > 0.001:
                             movimenti_pred.append(abs(dp))
                             movimenti_reali.append(abs(dr))
 
@@ -6093,7 +6128,7 @@ class OvertopBassanoV15Production:
                                     _st_hit_rate = sum(_sh)/len(_sh)
                                     _st_n = len(_sh)
                                     break
-                        _st_bypass = _st_hit_rate >= 0.60 and _st_n >= 10
+                        _st_bypass = _st_hit_rate >= 0.60 and _st_n >= 10 and not is_absolute and not is_absolute
                         if (_fp_wr_now >= 0.60 and _fp_samples >= 5) or _st_bypass:
                             _motivo = f"ST hit={_st_hit_rate:.0%} n={_st_n}" if _st_bypass else f"Oracolo WR={_fp_wr_now:.0%} n={_fp_samples:.0f}"
                             self._log_m2("✅", f"CESPUGLIO bypass — {_motivo} su {momentum}|{volatility}|{trend} — entro")
@@ -6142,7 +6177,7 @@ class OvertopBassanoV15Production:
                     f"{momentum}|{volatility}|{trend}|{_dir}", {})
                 _exp_real = _exp_mem.get('real_samples', 0)
                 _exp_wr   = fingerprint_wr
-                if _exp_real < 5 or _exp_wr < 0.65:
+                if _exp_real < 5 or _exp_wr < 0.35:
                     self._record_phantom(price, f"EXPLOSIVE_GATE_fp={_exp_wr:.0%}_n={_exp_real}",
                         seed['score'], momentum, volatility, trend)
                     return
@@ -7521,7 +7556,7 @@ class OvertopBassanoV15Production:
                     "m2_buy_distance":    round(getattr(self.campo, '_last_soglia', 60) - getattr(self.campo, '_last_score', 0), 1),
                     "m2_score_components": {
                         "seed":   round(min(1.0,max(0.0,(self.seed_scorer.score().get('score',0)-0.20)/0.60))*25, 1),
-                        "fp":     round(min(1.0,max(0.0,(self.oracolo.get_wr(self._last_momentum or 'MEDIO', self._last_volatility or 'MEDIA', self._last_trend or 'SIDEWAYS', self.campo._direction)-0.30)/0.50))*20, 1),
+                        "fp":     round(getattr(self.campo, '_last_fp_score', 0), 1),
                         "rsi":    round(self.campo._rsi_score()*10, 1),
                         "macd":   round(self.campo._macd_score()*10, 1),
                         "regime": self._regime_current,
