@@ -16,6 +16,7 @@ primo deploy su Render, leggendo i log. Il CUORE (numerazione atomica) è
 invece già stato testato a parte con 50 richieste concorrenti: zero collisioni.
 """
 import os, sqlite3, datetime, json
+import urllib.request, urllib.error
 from fastapi import FastAPI, HTTPException, Header, Request
 from fastapi.responses import JSONResponse, HTMLResponse, FileResponse
 from fastapi.staticfiles import StaticFiles
@@ -143,6 +144,56 @@ def export_erp(stato: str = "confermata", x_api_key: str = Header(None)):
     return {"schema":"EXPAN-EXPORT-ERP","versione":"1.0",
             "generato":datetime.datetime.now().isoformat(timespec="seconds"),
             "conteggio":len(offerte),"offerte":offerte}
+
+# ══════════════════ PARSER AI (DeepSeek) ══════════════════
+DEEPSEEK_API_KEY = os.environ.get("DEEPSEEK_API_KEY", "")
+DEEPSEEK_URL = "https://api.deepseek.com/chat/completions"
+
+PROMPT_PARSER = """Sei il parser di un configuratore di pressati in schiuma (profilo 2D estruso). Converti la richiesta in JSON. Rispondi SOLO con JSON valido, nessun testo, nessun markdown.
+Schema:{"shape":"RETT|POLY|ELL|LIBERO","rett":{"L":n,"P":n,"R":n},"poly":{"n":int,"d":n,"rot":n},"ell":{"a":n,"b":n},"strati":[{"materiale":"PU25|HR30|HR35|MEMORY50|GEL55","spessore_cm":n}],"fori":[{"d":n,"cx":n,"cy":n}],"canali":{"num":int,"larghezza_cm":n,"profondita_cm":n},"bugnato":bool,"estetica":"stringa o vuoto","quantita":int,"cliente":"MATVEN|NAUADR|MEDSRL|NUOVO","dubbi":["campo: motivo"]}
+Regole: triangolo->POLY n=3, esagono->POLY n=6, dodecagono/12 lati->POLY n=12, "diametro/lato"->poly.d. Rettangolo/lastra->RETT. Ovale/ellittico->ELL. Sagoma irregolare->LIBERO. "foro centrale"->cx=0,cy=0. Strati dall'alto. Materiale mancante->plausibile + voce in dubbi. Clienti: Materassificio Veneto=MATVEN, Nautica Adria=NAUADR, Ospedaliera Med=MEDSRL, else NUOVO."""
+
+@app.post("/api/interpreta")
+async def interpreta(request: Request):
+    """Riceve {testo}, chiama DeepSeek, restituisce il JSON dei parametri."""
+    if not DEEPSEEK_API_KEY:
+        raise HTTPException(503, "DEEPSEEK_API_KEY non configurata sul server")
+    body = await request.json()
+    testo = (body.get("testo") or "").strip()
+    if not testo:
+        raise HTTPException(400, "testo mancante")
+
+    payload = {
+        "model": "deepseek-chat",
+        "messages": [
+            {"role": "system", "content": PROMPT_PARSER},
+            {"role": "user", "content": testo},
+        ],
+        "temperature": 0,
+        "stream": False,
+    }
+    req = urllib.request.Request(
+        DEEPSEEK_URL,
+        data=json.dumps(payload).encode("utf-8"),
+        headers={"Content-Type": "application/json",
+                 "Authorization": f"Bearer {DEEPSEEK_API_KEY}"},
+        method="POST",
+    )
+    try:
+        with urllib.request.urlopen(req, timeout=30) as resp:
+            data = json.loads(resp.read().decode("utf-8"))
+    except urllib.error.HTTPError as e:
+        raise HTTPException(502, f"DeepSeek HTTP {e.code}: {e.read().decode('utf-8')[:200]}")
+    except Exception as e:
+        raise HTTPException(502, f"errore DeepSeek: {e}")
+
+    try:
+        contenuto = data["choices"][0]["message"]["content"]
+        contenuto = contenuto.replace("```json", "").replace("```", "").strip()
+        parametri = json.loads(contenuto)
+    except Exception as e:
+        raise HTTPException(502, f"risposta DeepSeek non interpretabile: {e}")
+    return parametri
 
 # ══════════════════ FRONT-END STATICO ══════════════════
 @app.get("/", response_class=HTMLResponse)
