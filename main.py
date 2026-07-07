@@ -19,16 +19,27 @@ import os, sqlite3, datetime, json
 from fastapi import FastAPI, HTTPException, Header, Request
 from fastapi.responses import JSONResponse, HTMLResponse, FileResponse
 from fastapi.staticfiles import StaticFiles
+from contextlib import asynccontextmanager
 
-DB_PATH   = os.environ.get("DB_PATH", "/var/data/expan.db")   # su Render: persistent disk
+DB_PATH   = os.environ.get("DB_PATH", "./data/expan.db")   # cartella locale del progetto, sempre scrivibile
 API_KEY   = os.environ.get("EXPORT_API_KEY", "cambia-questa-chiave")
 HTML_FILE = os.environ.get("HTML_FILE", "configuratore_expan_v2.html")
 
-app = FastAPI(title="EXPAN Configuratore", version="1.0")
+@asynccontextmanager
+async def lifespan(app):
+    init_db()
+    yield
+
+app = FastAPI(title="EXPAN Configuratore", version="1.0", lifespan=lifespan)
 
 # ══════════════════ DB ══════════════════
 def get_con():
-    os.makedirs(os.path.dirname(DB_PATH), exist_ok=True)
+    d = os.path.dirname(DB_PATH)
+    if d:
+        try:
+            os.makedirs(d, exist_ok=True)
+        except Exception:
+            pass
     con = sqlite3.connect(DB_PATH, timeout=30)
     con.execute("PRAGMA journal_mode=WAL;")
     return con
@@ -47,10 +58,6 @@ def init_db():
         payload_json TEXT);
     """)
     con.commit(); con.close()
-
-@app.on_event("startup")
-def _startup():
-    init_db()
 
 # ══════════════════ NUMERAZIONE ATOMICA (cuore già testato) ══════════════════
 def assegna_numero(con, cliente_cod, creata_da, payload):
@@ -143,3 +150,9 @@ def home():
     if os.path.exists(HTML_FILE):
         return FileResponse(HTML_FILE)
     return HTMLResponse("<h1>EXPAN Configuratore</h1><p>Back-end attivo. Carica il file HTML nel repo.</p>")
+
+# ══════════════════ AVVIO (funziona anche con 'python main.py') ══════════════════
+if __name__ == "__main__":
+    import uvicorn
+    port = int(os.environ.get("PORT", "8000"))
+    uvicorn.run("main:app", host="0.0.0.0", port=port)
