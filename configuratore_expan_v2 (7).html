@@ -1,0 +1,1406 @@
+<!DOCTYPE html>
+<html lang="it">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0">
+<title>EXPAN · Configuratore a profilo libero — Prototipo</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+<style>
+:root{
+  --ink:#1C2430; --paper:#F4F5F2; --panel:#FFFFFF; --line:#D8DCD6;
+  --petrol:#0E6B66; --petrol-soft:#E2EFEE; --amber:#E8A33D; --amber-soft:#FBF1DE;
+  --mono:'IBM Plex Mono','Courier New',monospace; --sans:'Inter',-apple-system,'Segoe UI',sans-serif;
+}
+*{box-sizing:border-box;margin:0;padding:0}
+body{background:var(--paper);color:var(--ink);font-family:var(--sans);font-size:15px;line-height:1.45}
+header{background:var(--ink);color:#EDEFEA;padding:14px 16px;position:sticky;top:0;z-index:50}
+header h1{font-size:16px;font-weight:700;letter-spacing:.03em}
+header .sub{font-family:var(--mono);font-size:11px;color:#9AA7B0;margin-top:2px}
+header .demo-badge{display:inline-block;background:var(--amber);color:var(--ink);font-family:var(--mono);font-size:10px;font-weight:700;padding:2px 7px;border-radius:3px;margin-left:8px;vertical-align:middle}
+main{max-width:760px;margin:0 auto;padding:14px 12px 60px}
+section{background:var(--panel);border:1px solid var(--line);border-radius:10px;margin-bottom:14px;overflow:hidden}
+.sec-head{padding:11px 14px;border-bottom:1px solid var(--line);display:flex;align-items:baseline;gap:10px}
+.sec-head .tag{font-family:var(--mono);font-size:10px;font-weight:700;color:var(--petrol);letter-spacing:.08em}
+.sec-head h2{font-size:14px;font-weight:700}
+.sec-body{padding:14px}
+textarea{width:100%;min-height:80px;border:1px solid var(--line);border-radius:8px;padding:10px;font-family:var(--sans);font-size:14px;resize:vertical;background:#FBFBF9}
+textarea:focus{outline:2px solid var(--petrol);border-color:transparent}
+.btn{display:inline-flex;align-items:center;gap:6px;border:none;border-radius:8px;padding:10px 16px;font-size:14px;font-weight:600;cursor:pointer;font-family:var(--sans)}
+.btn-primary{background:var(--petrol);color:#fff}.btn-primary:active{background:#0A544F}
+.btn-ghost{background:transparent;color:var(--petrol);border:1px solid var(--petrol)}
+.btn-mini{padding:6px 11px;font-size:12.5px}
+.btn:disabled{opacity:.5;cursor:wait}
+.row-btn{display:flex;gap:8px;margin-top:10px;flex-wrap:wrap}
+.dubbi{margin-top:10px;background:var(--amber-soft);border:1px solid var(--amber);border-radius:8px;padding:10px 12px;font-size:13px;display:none}
+.dubbi b{font-family:var(--mono);font-size:11px;letter-spacing:.06em}
+.parse-status{margin-top:8px;font-family:var(--mono);font-size:12px;color:#6B7680;display:none}
+#viewer{width:100%;height:300px;background:linear-gradient(180deg,#E9ECE7 0%,#DDE2DC 100%);position:relative;touch-action:none}
+#viewer canvas{display:block}
+.dim-strip{font-family:var(--mono);font-size:12px;padding:8px 14px;background:var(--ink);color:#DDE4E0;display:flex;gap:14px;flex-wrap:wrap}
+.dim-strip span b{color:#fff}
+.viewer-hint{position:absolute;bottom:8px;right:10px;font-family:var(--mono);font-size:10px;color:#7C8780;pointer-events:none}
+.shape-tabs{display:flex;gap:6px;margin-bottom:14px;flex-wrap:wrap}
+.shape-tab{flex:1;min-width:70px;text-align:center;padding:9px 4px;border:1px solid var(--line);border-radius:8px;font-size:12.5px;font-weight:600;cursor:pointer;background:#FBFBF9;color:#5A6570}
+.shape-tab.active{background:var(--petrol);color:#fff;border-color:var(--petrol)}
+.grid2{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+.grid3{display:grid;grid-template-columns:1fr 1fr 1fr;gap:10px}
+.field label{display:block;font-family:var(--mono);font-size:10.5px;font-weight:600;letter-spacing:.05em;color:#5A6570;margin-bottom:4px}
+.field input,.field select{width:100%;border:1px solid var(--line);border-radius:7px;padding:8px 9px;font-size:14px;font-family:var(--mono);background:#fff}
+.field input:focus,.field select:focus{outline:2px solid var(--petrol);border-color:transparent}
+.sub-title{font-family:var(--mono);font-size:11px;font-weight:700;letter-spacing:.08em;color:var(--petrol);margin:16px 0 8px;padding-top:12px;border-top:1px dashed var(--line)}
+.strato-row{display:grid;grid-template-columns:1fr 84px 34px;gap:8px;margin-bottom:8px;align-items:end}
+.strato-row .del,.foro-row .del{border:none;background:#F0EFEB;border-radius:7px;height:37px;cursor:pointer;color:#8A4444;font-weight:700}
+.foro-row{display:grid;grid-template-columns:1fr 1fr 1fr 34px;gap:8px;margin-bottom:8px;align-items:end}
+.add-link{font-family:var(--mono);font-size:12px;color:var(--petrol);background:none;border:none;cursor:pointer;font-weight:700;padding:4px 0}
+#polyEditor{width:100%;background:#FCFCFA;border:1px solid var(--line);border-radius:8px;touch-action:none;display:block}
+.poly-tools{display:flex;gap:8px;align-items:center;margin-top:8px;font-family:var(--mono);font-size:12px;color:#5A6570}
+table{width:100%;border-collapse:collapse;font-size:13px}
+th{font-family:var(--mono);font-size:10px;letter-spacing:.06em;color:#5A6570;text-align:left;padding:6px 8px;border-bottom:2px solid var(--ink)}
+td{padding:7px 8px;border-bottom:1px solid var(--line);font-family:var(--mono);font-size:12.5px}
+td.desc{font-family:var(--sans);font-size:13px}
+tr.tot td{font-weight:700;border-bottom:none;border-top:2px solid var(--ink)}
+.swatch{display:inline-block;width:11px;height:11px;border-radius:3px;margin-right:6px;vertical-align:-1px;border:1px solid rgba(0,0,0,.15)}
+.cascata{display:flex;flex-direction:column;gap:8px}
+.regola{border:1px solid var(--line);border-radius:9px;padding:11px 13px;position:relative;opacity:.55}
+.regola.applied{opacity:1;border:2px solid var(--petrol);background:var(--petrol-soft)}
+.regola .r-tag{font-family:var(--mono);font-size:10px;font-weight:700;letter-spacing:.07em;color:#5A6570}
+.regola.applied .r-tag{color:var(--petrol)}
+.regola .r-body{font-size:13px;margin-top:3px}
+.regola .r-price{font-family:var(--mono);font-size:16px;font-weight:700;position:absolute;right:13px;top:50%;transform:translateY(-50%)}
+.regola .applied-badge{position:absolute;top:-9px;right:12px;background:var(--petrol);color:#fff;font-family:var(--mono);font-size:9px;font-weight:700;padding:2px 8px;border-radius:10px;letter-spacing:.06em}
+.storico-item{border-left:3px solid var(--line);padding:8px 12px;margin-bottom:8px;font-size:13px}
+.storico-item.best{border-left-color:var(--petrol);background:var(--petrol-soft)}
+.storico-item .s-head{display:flex;justify-content:space-between;font-family:var(--mono);font-size:11.5px;font-weight:700}
+.storico-item .s-sim{color:var(--petrol)}
+.storico-item .s-desc{color:#5A6570;margin-top:2px;font-size:12.5px}
+.final-price{background:var(--ink);color:#fff;border-radius:10px;padding:16px;margin-top:14px;display:flex;justify-content:space-between;align-items:center}
+.final-price .fp-label{font-family:var(--mono);font-size:11px;color:#9AA7B0;letter-spacing:.06em}
+.final-price .fp-val{font-family:var(--mono);font-size:26px;font-weight:700}
+.final-price .fp-tot{text-align:right}.final-price .fp-tot .fp-val{font-size:18px;color:#C9E4E1}
+.note-line{font-size:12px;color:#6B7680;margin-top:10px;font-style:italic}
+.motivo{font-size:12.5px;background:#FBFBF9;border:1px dashed var(--line);border-radius:8px;padding:9px 12px;margin-top:10px;font-family:var(--mono)}
+.svg-wrap{overflow-x:auto;background:#FCFCFA;border:1px solid var(--line);border-radius:8px;padding:8px}
+.two-cols{display:grid;grid-template-columns:1fr;gap:12px}
+@media(min-width:640px){.two-cols{grid-template-columns:1fr 1fr}}
+footer{text-align:center;font-family:var(--mono);font-size:10.5px;color:#8A939C;padding:20px}
+</style>
+</head>
+<body>
+<header>
+  <h1>EXPAN · Configuratore a profilo libero<span class="demo-badge">PROTOTIPO — DATI FITTIZI</span></h1>
+  <div class="sub">DT Group S.r.l. — un pressato = un profilo di taglio × spessore · uso interno commerciale</div>
+</header>
+<main>
+
+<!-- 00 TESTATA OFFERTA -->
+<section style="border:2px solid var(--petrol)">
+  <div class="sec-head" style="background:var(--petrol-soft)"><span class="tag">OFFERTA</span><h2 id="testataTitolo">—</h2></div>
+  <div class="sec-body">
+    <div class="grid3">
+      <div class="field"><label>N° OFFERTA</label><input type="text" id="offNum" readonly style="background:#F0F0EC;font-weight:700"></div>
+      <div class="field"><label>DATA</label><input type="text" id="offData" readonly style="background:#F0F0EC"></div>
+      <div class="field"><label>CLIENTE (da anagrafica OIP)</label><select id="offCliente">
+        <option value="MATVEN">Materassificio Veneto S.r.l.</option>
+        <option value="NAUADR">Nautica Adria S.p.A.</option>
+        <option value="MEDSRL">Ospedaliera Med S.r.l.</option>
+        <option value="NUOVO">— nuovo cliente (provvisorio) —</option>
+      </select></div>
+    </div>
+    <div id="anagBox" style="margin-top:10px"></div>
+    <div id="nuovoClienteBox" style="display:none;margin-top:10px">
+      <div class="sub-title" style="margin-top:0;padding-top:0;border:none">NUOVO CLIENTE — PROVVISORIO</div>
+      <div class="grid2">
+        <div class="field"><label>RAGIONE SOCIALE</label><input type="text" id="ncNome" placeholder="Denominazione"></div>
+        <div class="field"><label>P.IVA</label><input type="text" id="ncPiva" placeholder="IT…"></div>
+      </div>
+      <div class="note-line">⚠ Cliente provvisorio: da riconciliare in OIP prima di chiudere l'ordine. Non è un secondo master.</div>
+    </div>
+  </div>
+</section>
+
+<!-- 01 RICHIESTA -->
+<section>
+  <div class="sec-head"><span class="tag">01</span><h2>Richiesta del cliente</h2></div>
+  <div class="sec-body">
+    <textarea id="richiesta" placeholder="Incolla mail o note. Es: «pannello triangolare lato 40 con foro centrale Ø12, HR35 spessore 6, 100 pezzi» oppure «seduta esagonale diametro 45, due strati memory 3 + HR35 7, 300 pz per Nautica Adria»"></textarea>
+    <div class="row-btn">
+      <button class="btn btn-primary" id="btnParse">Interpreta richiesta</button>
+      <button class="btn btn-ghost" id="btnEsempio">Carica esempio</button>
+    </div>
+    <div class="parse-status" id="parseStatus"></div>
+    <div class="dubbi" id="dubbiBox"></div>
+  </div>
+</section>
+
+<!-- 02 3D -->
+<section>
+  <div class="sec-head"><span class="tag">02</span><h2>Anteprima 3D</h2></div>
+  <div id="viewer"><div class="viewer-hint">trascina per ruotare</div></div>
+  <div class="dim-strip" id="dimStrip"></div>
+</section>
+
+<!-- 03 FORMA -->
+<section>
+  <div class="sec-head"><span class="tag">03</span><h2>Profilo — forma libera</h2></div>
+  <div class="sec-body">
+    <div class="shape-tabs">
+      <div class="shape-tab" data-shape="RETT">Rettangolo</div>
+      <div class="shape-tab" data-shape="POLY">Poligono N&nbsp;lati</div>
+      <div class="shape-tab" data-shape="ELL">Ellisse</div>
+      <div class="shape-tab" data-shape="LIBERO">Disegna libero</div>
+      <div class="shape-tab" data-shape="DXF">Da DXF cliente</div>
+    </div>
+
+    <!-- rett -->
+    <div id="paramRETT" class="param-block">
+      <div class="grid3">
+        <div class="field"><label>LUNGH. (cm)</label><input type="number" id="rL" value="60" min="5" max="220"></div>
+        <div class="field"><label>PROF. (cm)</label><input type="number" id="rP" value="40" min="5" max="160"></div>
+        <div class="field"><label>RAGGIO ANG. (cm)</label><input type="number" id="rR" value="4" min="0" max="30"></div>
+      </div>
+    </div>
+    <!-- poly -->
+    <div id="paramPOLY" class="param-block" style="display:none">
+      <div class="grid3">
+        <div class="field"><label>N° LATI</label><input type="number" id="pN" value="6" min="3" max="16"></div>
+        <div class="field"><label>DIAMETRO (cm)</label><input type="number" id="pD" value="45" min="6" max="200"></div>
+        <div class="field"><label>ROTAZIONE (°)</label><input type="number" id="pRot" value="0" min="0" max="360"></div>
+      </div>
+      <div class="note-line">3 lati = triangolo · 6 = esagono · 8 = ottagono…</div>
+    </div>
+    <!-- ellisse -->
+    <div id="paramELL" class="param-block" style="display:none">
+      <div class="grid2">
+        <div class="field"><label>ASSE X (cm)</label><input type="number" id="eA" value="70" min="6" max="220"></div>
+        <div class="field"><label>ASSE Y (cm)</label><input type="number" id="eB" value="45" min="6" max="200"></div>
+      </div>
+    </div>
+    <!-- libero -->
+    <div id="paramLIBERO" class="param-block" style="display:none">
+      <div class="note-line" style="margin-top:0">Tocca per aggiungere vertici. Il profilo si chiude da solo. Griglia = 10 cm.</div>
+      <svg id="polyEditor" viewBox="0 0 300 300" height="240"></svg>
+      <div class="poly-tools">
+        <button class="btn btn-ghost btn-mini" id="polyClear">Svuota</button>
+        <button class="btn btn-ghost btn-mini" id="polyUndo">Annulla ultimo</button>
+        <span id="polyCount">0 vertici</span>
+      </div>
+    </div>
+
+    <!-- dxf -->
+    <div id="paramDXF" class="param-block" style="display:none">
+      <div class="note-line" style="margin-top:0">Carica il DXF della sagoma del cliente. Il contorno diventa il profilo del pezzo con le sue quote reali (mm→cm). Entità lette: polilinee, linee, cerchi (=fori), archi, spline campionate.</div>
+      <div class="row-btn">
+        <label class="btn btn-ghost btn-mini" style="cursor:pointer">Carica file DXF<input type="file" id="dxfFile" accept=".dxf" style="display:none"></label>
+      </div>
+      <div class="parse-status" id="dxfStatus" style="display:none"></div>
+    </div>
+
+    <div class="sub-title">STRATIGRAFIA (dall'alto)</div>
+    <div id="stratiBox"></div>
+    <button class="add-link" id="addStrato">+ aggiungi strato</button>
+
+    <div class="sub-title">FORI PASSANTI</div>
+    <div id="foriBox"></div>
+    <button class="add-link" id="addForo">+ aggiungi foro</button>
+
+    <div class="sub-title">CANALI SUPERFICIALI</div>
+    <div class="grid3">
+      <div class="field"><label>CANALI (n°)</label><input type="number" id="canN" value="0" min="0" max="12"></div>
+      <div class="field"><label>LARGH. (cm)</label><input type="number" id="canW" value="2" min="0.5" max="8" step="0.5"></div>
+      <div class="field"><label>PROF. (cm)</label><input type="number" id="canD" value="1.5" min="0.5" max="6" step="0.5"></div>
+    </div>
+
+    <div class="sub-title">FINITURA / ESTETICA</div>
+    <div class="grid2">
+      <div class="field"><label>PROFILO BUGNATO</label><select id="bugnato"><option value="no">No</option><option value="si">Sì (superficie ondulata)</option></select></div>
+      <div class="field"><label>COLORE / RIVESTIMENTO</label><input type="text" id="estetica" placeholder="es. rosso in massa"></div>
+    </div>
+    <div class="note-line" id="esteticaNote" style="display:none"></div>
+
+    <div class="sub-title">COMMESSA</div>
+    <div class="grid2">
+      <div class="field"><label>QUANTITÀ (pz)</label><input type="number" id="qty" value="100" min="1"></div>
+      <div class="field"><label>CLIENTE</label><select id="cliente">
+        <option value="MATVEN">Materassificio Veneto S.r.l.</option>
+        <option value="NAUADR">Nautica Adria S.p.A.</option>
+        <option value="MEDSRL">Ospedaliera Med S.r.l.</option>
+        <option value="NUOVO">— nuovo cliente —</option>
+      </select></div>
+    </div>
+  </div>
+</section>
+
+<!-- 03b RICONOSCIMENTO FORMA -->
+<section>
+  <div class="sec-head"><span class="tag">03b</span><h2>Riconoscimento forma — cliente</h2></div>
+  <div class="sec-body">
+    <div id="formaMatchBox"></div>
+    <div id="mancantiBox" style="margin-top:10px"></div>
+  </div>
+</section>
+
+<!-- 03c REGOLE SEMANTICHE -->
+<section>
+  <div class="sec-head"><span class="tag">03c</span><h2>Regole di processo — dichiarative</h2></div>
+  <div class="sec-body">
+    <textarea id="fraseRegola" placeholder="Dichiara una regola a parole. Es: «se la larghezza supera 47 allora usa macchina B consumo 1.15» · «se altezza maggiore di 75 allora usa materiale HR35» · «se colore rosso allora maggiora del 12%» · «se spessore minore di 3 allora blocca»"></textarea>
+    <div class="row-btn">
+      <button class="btn btn-primary btn-mini" id="btnCapisci">Interpreta e mostra</button>
+      <button class="btn btn-ghost btn-mini" id="esR1">es. macchina</button>
+      <button class="btn btn-ghost btn-mini" id="esR2">es. materiale</button>
+      <button class="btn btn-ghost btn-mini" id="esR3">es. colore</button>
+    </div>
+    <div id="capitoBox" style="display:none;margin-top:10px;border:2px solid var(--petrol);background:var(--petrol-soft);border-radius:9px;padding:11px">
+      <div style="font-family:var(--mono);font-size:10px;font-weight:700;color:var(--petrol);letter-spacing:.06em;margin-bottom:6px">HO CAPITO — CONFERMA PRIMA DI CONGELARE</div>
+      <div id="capitoRegola" style="font-family:var(--mono);font-size:12.5px;line-height:1.7"></div>
+      <button class="btn btn-primary btn-mini" id="btnCongela" style="margin-top:8px">✓ Congela regola</button>
+    </div>
+    <div class="sub-title">REGOLE CONGELATE</div>
+    <div id="regoleBox"></div>
+    <div class="note-line">Interpretate una volta alla scrittura, poi eseguite deterministiche sul pezzo configurato.</div>
+  </div>
+</section>
+
+<!-- 04 DISTINTA -->
+<section>
+  <div class="sec-head"><span class="tag">04</span><h2>Distinta base e ciclo per reparto</h2></div>
+  <div class="sec-body">
+    <div id="regoleEsitoBox" style="margin-bottom:10px"></div>
+    <div id="distintaBox"></div>
+    <div class="note-line">Costo = materiale (kg × €/kg) + Σ tempi-macchina per reparto × €/ora, modificato dalle regole attive. Numeri del listino fittizi.</div>
+  </div>
+</section>
+
+<!-- 05 PREZZO -->
+<section>
+  <div class="sec-head"><span class="tag">05</span><h2>Valorizzazione — cascata prezzi</h2></div>
+  <div class="sec-body">
+    <div class="cascata" id="cascataBox"></div>
+    <div class="sub-title">STORICO COMMESSE SIMILI — STESSO CLIENTE</div>
+    <div id="storicoBox"></div>
+    <div class="motivo" id="motivoBox"></div>
+    <div class="final-price">
+      <div><div class="fp-label">PREZZO PROPOSTO / PZ</div><div class="fp-val" id="fpUnit">—</div></div>
+      <div class="fp-tot"><div class="fp-label">TOTALE COMMESSA</div><div class="fp-val" id="fpTot">—</div></div>
+    </div>
+    <div class="note-line">Prezzo proposto, non vincolante: conferma e override restano al commerciale e vengono tracciati.</div>
+  </div>
+</section>
+
+<!-- 06 TAVOLA -->
+<section>
+  <div class="sec-head"><span class="tag">06</span><h2>Tavola quotata (allegato offerta)</h2></div>
+  <div class="sec-body">
+    <div class="two-cols">
+      <div><div class="sub-title" style="border:none;margin-top:0;padding-top:0">PIANTA</div><div class="svg-wrap" id="svgPianta"></div></div>
+      <div><div class="sub-title" style="border:none;margin-top:0;padding-top:0">SEZIONE</div><div class="svg-wrap" id="svgSezione"></div></div>
+    </div>
+  </div>
+</section>
+
+<!-- 07 QR -->
+<section>
+  <div class="sec-head"><span class="tag">07</span><h2>QR scheda tecnica — senza prezzo</h2></div>
+  <div class="sec-body">
+    <div style="display:flex;gap:16px;align-items:flex-start;flex-wrap:wrap">
+      <div id="qrBox" style="flex:0 0 auto"></div>
+      <div style="flex:1;min-width:180px;font-size:13px;color:#5A6570">
+        <div style="font-family:var(--mono);font-size:11px;font-weight:700;color:var(--petrol);letter-spacing:.06em;margin-bottom:6px">CONTENUTO EMBEDDED (offline)</div>
+        <div id="qrData" style="font-family:var(--mono);font-size:11.5px;line-height:1.7"></div>
+        <div class="note-line">Il QR contiene i dati dentro sé stesso: forma, dimensioni, stratigrafia, materiali, lavorazioni, quantità e profilo quotato. <b>Nessun valore economico.</b> Inquadrabile da reparto, magazzino o cliente. Predisposto per diventare un link-commessa quando ci sarà il backend.</div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- 08 OFFERTA PDF -->
+<section style="border:2px solid var(--petrol)">
+  <div class="sec-head" style="background:var(--petrol-soft)"><span class="tag">08</span><h2>Genera offerta PDF</h2></div>
+  <div class="sec-body">
+    <p style="font-size:13px;color:#5A6570;margin-bottom:12px">Genera l'offerta con i dati reali della configurazione: testata, disegno quotato del profilo, specifiche, prezzo. Documento pronto da inviare al cliente.</p>
+    <button class="btn btn-primary" id="btnPDF">↓ Genera offerta PDF</button>
+    <div class="note-line" id="pdfNote"></div>
+  </div>
+</section>
+
+<footer>Prototipo dimostrativo · Tecnaria per DT Group / Expan · dati economici inventati</footer>
+</main>
+
+<script>
+/* ═══════════ LISTINO (sorgente dati) ═══════════
+   In demo: oggetto JSON locale. In produzione getListino() diventa
+   una fetch async verso API/SQL — il motore non cambia. */
+const LISTINO = {
+  materiali:{
+    PU25:{nome:'Poliuretano PU 25',dens:25,eurKg:3.20,cutFactor:1.00,col:0xD9C79E,hex:'#D9C79E'},
+    HR30:{nome:'HR 30 alta resilienza',dens:30,eurKg:4.10,cutFactor:1.15,col:0x7BA7C9,hex:'#7BA7C9'},
+    HR35:{nome:'HR 35 alta resilienza',dens:35,eurKg:4.60,cutFactor:1.30,col:0x4E7EA8,hex:'#4E7EA8'},
+    MEMORY50:{nome:'Memory 50 viscoelastico',dens:50,eurKg:8.90,cutFactor:1.50,col:0xF2EDE4,hex:'#F2EDE4'},
+    GEL55:{nome:'Gel 55 termoregolante',dens:55,eurKg:12.50,cutFactor:1.60,col:0x6FCACD,hex:'#6FCACD'}
+  },
+  reparti:{ taglio:{nome:'Taglio profilo CNC',eurOra:48}, fresatura:{nome:'Fresatura/foratura',eurOra:55}, incollaggio:{nome:'Incollaggio',eurOra:38}, profilatura:{nome:'Profilatura bugne',eurOra:62} },
+  // tempi in minuti
+  lav:{
+    taglio:{base:1.2, perMetro:2.4},      // + perimetro(m) × perMetro × cutFactor
+    foro:{base:0.15, perCm:0.10},         // per foro: base + Ø(cm)×perCm ×cutFactor
+    canale:{perMetro:2.0},                // × metri canale
+    incollaggio:{perM2:3.5},              // per interfaccia × m²
+    profilatura:{perM2:5.0}               // bugnato × m²
+  },
+  setupEur:55, movimentazioneMin:1.0,
+  scaglie:[[1000,0.18],[500,0.12],[100,0.05],[0,0]]
+};
+function getListino(){ return LISTINO; }   // ← punto di sostituzione API/SQL
+
+/* ═══════════ MOTORE REGOLE DICHIARATIVE (dentro la stessa matrice) ═══════════
+   Regola congelata deterministica:
+   {id,frase,condizioni:[{campo,op,val}],connettore:'AND'|'OR',azioni:[...]}
+   Campi pezzo: W,H,L,S(spessore),D(densità),Q(qta),C(colore),MAT(materiale)
+   Azioni: MACCHINA{macchina,consumo}·VIETA_MAT{mat}·SOST_MAT{mat}·MAGGIORA{perc}·BLOCCA{motivo} */
+let REGOLE=[];        // regole congelate (persistono nella sessione)
+let regolaPending=null;
+const CAMPI_R={larghezza:'W',altezza:'H',lunghezza:'L',spessore:'S',densità:'D',densita:'D',quantità:'Q',quantita:'Q',colore:'C',materiale:'MAT'};
+const CAMPO_LABEL_R={W:'larghezza',H:'altezza',L:'lunghezza',S:'spessore',D:'densità',Q:'quantità',C:'colore',MAT:'materiale'};
+const OP_WORDS_R=[[/\b(maggiore|superiore|supera|oltre|più di|piu di|sopra)\b/,'>'],[/\b(minore|inferiore|sotto|meno di)\b/,'<'],[/\b(almeno|non meno di|maggiore o uguale)\b/,'>='],[/\b(fino a|al massimo|non oltre|minore o uguale)\b/,'<='],[/\b(uguale a|pari a)\b/,'='],[/\b(diverso da|diversa da|non è)\b/,'!=']];
+const MAT_LIST_R=['PU25','HR30','HR35','MEMORY50','GEL55'];
+
+function interpretaRegola(frase){
+  const f=' '+frase.toLowerCase().replace(/\s+/g,' ')+' ';
+  const err=[];
+  const m=f.match(/\bse\b(.*?)\ballora\b(.*)/);
+  if(!m) return {err:['Manca la struttura «SE … ALLORA …».']};
+  let condPart=m[1], azPart=m[2];
+  const connettore = /\bo\b|\boppure\b/.test(condPart)&&!/\be\b/.test(condPart)?'OR':'AND';
+  const chunks=condPart.split(/\b(?:e|o|oppure)\b/).map(s=>s.trim()).filter(Boolean);
+  const condizioni=[];
+  chunks.forEach(ch=>{
+    let campo=null,key=null;
+    for(const [w,k] of Object.entries(CAMPI_R)){ if(ch.includes(w)){campo=k;key=w;break;} }
+    if(!campo) return;
+    if(campo==='C'){ const mc=ch.match(/colore (?:è |uguale a |pari a )?(\w+)/)||ch.match(/(rosso|blu|verde|nero|giallo)/); if(mc){condizioni.push({campo:'C',op:'=',val:(mc[1]||'').toUpperCase()});} return; }
+    if(campo==='MAT'){ const mm=MAT_LIST_R.find(x=>ch.toUpperCase().includes(x)); if(mm)condizioni.push({campo:'MAT',op:'=',val:mm}); return; }
+    let op=null; for(const [rx,o] of OP_WORDS_R){ if(rx.test(ch)){op=o;break;} }
+    if(!op){ const s=ch.match(/(>=|<=|>|<|=)/); if(s)op=s[1]; }
+    const n=ch.match(/(-?\d+(?:[.,]\d+)?)/);
+    if(op&&n) condizioni.push({campo,op,val:parseFloat(n[1].replace(',','.'))});
+    else err.push('Condizione su «'+key+'» incompleta.');
+  });
+  if(!condizioni.length) err.push('Nessuna condizione riconosciuta.');
+  const azioni=[];
+  const mMacc=azPart.match(/macchina (\w+)/);
+  const mCons=azPart.match(/consumo (?:di )?(\d+(?:[.,]\d+)?)/)||azPart.match(/(\d+(?:[.,]\d+)?) volte/);
+  const mSost=azPart.match(/(?:usa|sostituisci con|passa a) (?:il )?materiale (\w+)/);
+  const mViet=azPart.match(/(?:vietat[ao]|non (?:si )?(?:può|puo)|escludi|no) (?:il )?materiale (\w+)/);
+  const mMagg=azPart.match(/maggiora(?:zione)? (?:del )?(\d+(?:[.,]\d+)?)\s?%/)||azPart.match(/(\d+(?:[.,]\d+)?)\s?% in più/);
+  const blocca=/\bblocca|non produci|non (?:è )?fattibile|incoerente|impossibile\b/.test(azPart);
+  if(mMacc){ azioni.push({tipo:'MACCHINA',macchina:mMacc[1].toUpperCase(),consumo:mCons?parseFloat(mCons[1].replace(',','.')):1.15}); }
+  if(mSost){ const mm=MAT_LIST_R.find(x=>x===mSost[1].toUpperCase())||mSost[1].toUpperCase(); azioni.push({tipo:'SOST_MAT',mat:mm}); }
+  if(mViet){ const mm=MAT_LIST_R.find(x=>x===mViet[1].toUpperCase())||mViet[1].toUpperCase(); azioni.push({tipo:'VIETA_MAT',mat:mm}); }
+  if(mMagg){ azioni.push({tipo:'MAGGIORA',perc:parseFloat(mMagg[1].replace(',','.'))}); }
+  if(blocca){ azioni.push({tipo:'BLOCCA',motivo:'configurazione dichiarata incoerente'}); }
+  if(!azioni.length) err.push('Nessuna azione riconosciuta.');
+  return {condizioni,connettore,azioni,err};
+}
+function descrCondR(c){ return `${CAMPO_LABEL_R[c.campo]} ${c.op} ${c.val}`; }
+function descrAzR(a){
+  if(a.tipo==='MACCHINA') return `macchina ${a.macchina} (consumo ×${a.consumo})`;
+  if(a.tipo==='SOST_MAT') return `usa materiale ${a.mat}`;
+  if(a.tipo==='VIETA_MAT') return `vieta materiale ${a.mat}`;
+  if(a.tipo==='MAGGIORA') return `maggiora ${a.perc}%`;
+  if(a.tipo==='BLOCCA') return `BLOCCA`;
+  return '?';
+}
+// pezzo corrente derivato dalla config (mappa i campi reali del configuratore)
+function pezzoRegole(k){
+  const bb=k.g.bb;
+  return { W:Math.round(bb.maxx-bb.minx), H:Math.round(bb.maxy-bb.miny),
+    L:Math.round(Math.max(bb.maxx-bb.minx,bb.maxy-bb.miny)),
+    S:cfg.strati.reduce((a,s)=>a+s.h,0), D:M()[cfg.strati[0].mat].dens, Q:cfg.qty,
+    C:(/ross/i.test(cfg.estetica)?'ROSSO':(cfg.estetica||'').toUpperCase()), MAT:cfg.strati[0].mat };
+}
+function testCondR(c,p){
+  const v=p[c.campo];
+  if(c.campo==='C'||c.campo==='MAT') return c.op==='=' ? String(v)===String(c.val) : String(v)!==String(c.val);
+  switch(c.op){case'>':return v>c.val;case'<':return v<c.val;case'>=':return v>=c.val;case'<=':return v<=c.val;case'=':return v===c.val;case'!=':return v!==c.val;}
+  return false;
+}
+function regolaAttivaR(r,p){
+  if(!r.condizioni.length) return false;
+  const res=r.condizioni.map(c=>testCondR(c,p));
+  return r.connettore==='OR'?res.some(Boolean):res.every(Boolean);
+}
+// valuta tutte le regole sul pezzo → effetti su costo/materiale/blocco + log
+function valutaRegole(k){
+  const p=pezzoRegole(k);
+  const esiti=[]; let consumo=1.0, macchina='A (base)', maggiora=0, bloccato=null, sostMat=null; const vietati=[];
+  REGOLE.forEach(r=>{
+    if(!regolaAttivaR(r,p)){ esiti.push({stato:'dorm',frase:r.frase,txt:'non si applica'}); return; }
+    r.azioni.forEach(a=>{
+      if(a.tipo==='BLOCCA'){ bloccato=a.motivo; esiti.push({stato:'blocco',frase:r.frase,txt:'BLOCCA — '+a.motivo}); }
+      else if(a.tipo==='MACCHINA'){ macchina=a.macchina; consumo*=a.consumo; esiti.push({stato:'attiva',frase:r.frase,txt:`macchina ${a.macchina}, consumo ×${a.consumo}`}); }
+      else if(a.tipo==='SOST_MAT'){ sostMat=a.mat; esiti.push({stato:'attiva',frase:r.frase,txt:`materiale → ${a.mat}`}); }
+      else if(a.tipo==='VIETA_MAT'){ vietati.push(a.mat); esiti.push({stato:'attiva',frase:r.frase,txt:`vieta ${a.mat}`}); }
+      else if(a.tipo==='MAGGIORA'){ maggiora+=a.perc; esiti.push({stato:'attiva',frase:r.frase,txt:`+${a.perc}%`}); }
+    });
+  });
+  const violMat = vietati.includes(p.MAT) ? p.MAT : null;
+  return {p,esiti,consumo,macchina,maggiora,bloccato,sostMat,vietati,violMat};
+}
+
+const CLIENTI = {
+  MATVEN:{nome:'Materassificio Veneto',settore:'arredo',margine:0.32,
+    accordo:{rif:'AQ-2025-114',sconto:0.08,shapeFam:'RETT'},
+    storico:[
+      {desc:'Lastra HR30+Memory 190×80×14',shape:'RETT',vol:212.8,nLav:4,mat:'MEMORY50',prezzo:21.40,data:'02/2026'},
+      {desc:'Lastra HR35 200×90×12 liscia',shape:'RETT',vol:216.0,nLav:0,mat:'HR35',prezzo:16.80,data:'11/2025'},
+      {desc:'Guanciale esagonale Ø55×11 memory',shape:'POLY',vol:26.4,nLav:2,mat:'MEMORY50',prezzo:6.90,data:'03/2026'}]},
+  NAUADR:{nome:'Nautica Adria',settore:'nautica',margine:0.47,accordo:null,
+    storico:[
+      {desc:'Seduta pozzetto sagomata 95×55×9 HR35',shape:'LIBERO',vol:47.0,nLav:3,mat:'HR35',prezzo:14.20,data:'05/2026'},
+      {desc:'Esagono prendisole Ø60×8 HR35',shape:'POLY',vol:36.4,nLav:2,mat:'HR35',prezzo:12.50,data:'04/2026'},
+      {desc:'Schienale ellittico 120×45×6 PU25',shape:'ELL',vol:32.4,nLav:1,mat:'PU25',prezzo:5.10,data:'01/2026'}]},
+  MEDSRL:{nome:'Ospedaliera Med',settore:'medicale',margine:0.58,
+    accordo:{rif:'AQ-2026-031',sconto:0.05,shapeFam:'RETT'},
+    storico:[
+      {desc:'Antidecubito bugnato 190×85×12 PU25',shape:'RETT',vol:193.8,nLav:1,mat:'PU25',prezzo:24.60,data:'06/2026'},
+      {desc:'Triangolo posizionatore lato 40×15 memory',shape:'POLY',vol:22.5,nLav:2,mat:'MEMORY50',prezzo:9.40,data:'12/2025'},
+      {desc:'Bugnato Ø50 fori aerazione HR30',shape:'POLY',vol:48.0,nLav:9,mat:'HR30',prezzo:15.20,data:'02/2026'}]},
+  NUOVO:{nome:'Nuovo cliente',settore:'arredo',margine:0.38,accordo:null,storico:[]}
+};
+
+/* ═══════════ ANAGRAFICA CLIENTI (JSON — oggi locale, domani letta da OIP) ═══════════
+   In produzione questa non è una costante: è la lettura in sola-lettura
+   dell'anagrafica clienti dal gestionale. Il cliente è verità di OIP. */
+const ANAGRAFICHE={
+  MATVEN:{ragioneSociale:'Materassificio Veneto S.r.l.',piva:'IT02345670284',indirizzo:"Via dell'Industria 14, Thiene (VI)",referente:'A. Bortoli',email:'acquisti@matven.it',fonte:'OIP'},
+  NAUADR:{ragioneSociale:'Nautica Adria S.p.A.',piva:'IT03987650275',indirizzo:'Zona Portuale 8, Chioggia (VE)',referente:'M. Boscolo',email:'ufficiotecnico@nauticadria.it',fonte:'OIP'},
+  MEDSRL:{ragioneSociale:'Ospedaliera Med S.r.l.',piva:'IT04123980281',indirizzo:'Via della Salute 3, Padova (PD)',referente:'L. Ferrari',email:'ordini@ospedalieramed.it',fonte:'OIP'}
+};
+function getAnagrafica(slug){ return ANAGRAFICHE[slug]||null; }  // ← punto di sostituzione OIP
+// stato testata offerta
+let testata={ numero:null, data:null, clienteProvvisorio:null };
+const CATALOGO_FORME={
+  MATVEN:[
+    {type:'RETT',L:190,P:80,holes:0,commessa:'CM-2411',codice:'ART-LST-19080',prezzo:16.80,data:'11/2025'},
+    {type:'POLY',n:6,d:55,holes:0,commessa:'CM-2603',codice:'ART-ESA-55',prezzo:6.90,data:'03/2026'}
+  ],
+  NAUADR:[
+    {type:'POLY',n:6,d:60,holes:0,commessa:'CM-2604',codice:'ART-ESA-60',prezzo:12.50,data:'04/2026'},
+    {type:'LIBERO',W:95,H:55,holes:0,commessa:'CM-2605',codice:'ART-SED-95',prezzo:14.20,data:'05/2026'}
+  ],
+  MEDSRL:[
+    {type:'POLY',n:3,d:46,holes:1,commessa:'CM-2512',codice:'ART-TRI-40F',prezzo:9.40,data:'12/2025'},
+    {type:'POLY',n:6,d:50,holes:8,commessa:'CM-2602',codice:'ART-BUG-50',prezzo:15.20,data:'02/2026'}
+  ],
+  NUOVO:[]
+};
+const fmt=v=>v.toLocaleString('it-IT',{minimumFractionDigits:2,maximumFractionDigits:2});
+const M=()=>getListino().materiali;
+
+/* ═══════════ STATO ═══════════ */
+let cfg={
+  shape:'RETT',
+  rett:{L:60,P:40,R:4}, poly:{n:6,d:45,rot:0}, ell:{a:70,b:45}, libero:[],
+  strati:[{mat:'HR35',h:6}],
+  fori:[], can:{n:0,w:2,d:1.5}, bugnato:false, estetica:'',
+  qty:100, cliente:'MATVEN'
+};
+
+/* ═══════════ GEOMETRIA: profilo → punti (cm, centrato) ═══════════ */
+function outlinePoints(){
+  const pts=[];
+  if(cfg.shape==='RETT'){
+    const {L,P,R}=cfg.rett; const r=Math.max(0,Math.min(R,L/2-.01,P/2-.01));
+    const seg=6, corners=[[L/2-r,P/2-r,0],[-L/2+r,P/2-r,Math.PI/2],[-L/2+r,-P/2+r,Math.PI],[L/2-r,-P/2+r,-Math.PI/2]];
+    if(r<=0){ return [{x:L/2,y:P/2},{x:-L/2,y:P/2},{x:-L/2,y:-P/2},{x:L/2,y:-P/2}]; }
+    corners.forEach(([cx,cy,a0])=>{ for(let i=0;i<=seg;i++){ const a=a0+(Math.PI/2)*(i/seg); pts.push({x:cx+r*Math.cos(a),y:cy+r*Math.sin(a)}); } });
+  } else if(cfg.shape==='POLY'){
+    const {n,d,rot}=cfg.poly; const R=d/2, off=rot*Math.PI/180 - Math.PI/2;
+    for(let i=0;i<n;i++){ const a=off+2*Math.PI*i/n; pts.push({x:R*Math.cos(a),y:R*Math.sin(a)}); }
+  } else if(cfg.shape==='ELL'){
+    const {a,b}=cfg.ell, seg=56;
+    for(let i=0;i<seg;i++){ const t=2*Math.PI*i/seg; pts.push({x:a/2*Math.cos(t),y:b/2*Math.sin(t)}); }
+  } else if(cfg.shape==='LIBERO' || cfg.shape==='DXF'){
+    return cfg.libero.length>=3 ? cfg.libero.map(p=>({x:p.x,y:p.y})) : [{x:-20,y:-15},{x:20,y:-15},{x:0,y:20}];
+  }
+  return pts;
+}
+function holePoints(h){
+  const seg=Math.max(12,h.d*1.2), r=h.d/2, out=[];
+  for(let i=0;i<seg;i++){ const a=2*Math.PI*i/seg; out.push({x:h.cx+r*Math.cos(a),y:h.cy+r*Math.sin(a)}); }
+  return out;
+}
+function shoelace(pts){ let s=0; for(let i=0;i<pts.length;i++){ const a=pts[i],b=pts[(i+1)%pts.length]; s+=a.x*b.y-b.x*a.y; } return Math.abs(s)/2; }
+function perimeter(pts){ let s=0; for(let i=0;i<pts.length;i++){ const a=pts[i],b=pts[(i+1)%pts.length]; s+=Math.hypot(b.x-a.x,b.y-a.y); } return s; }
+function bbox(pts){ const xs=pts.map(p=>p.x),ys=pts.map(p=>p.y); return {minx:Math.min(...xs),maxx:Math.max(...xs),miny:Math.min(...ys),maxy:Math.max(...ys)}; }
+
+/* area/vol/peso netti */
+function geometryMetrics(){
+  const out=outlinePoints();
+  const areaOut=shoelace(out);                      // cm²
+  const areaHoles=cfg.fori.reduce((a,h)=>a+Math.PI*Math.pow(h.d/2,2),0);
+  const areaNet=Math.max(1,areaOut-areaHoles);      // cm²
+  const perim=perimeter(out)+cfg.fori.reduce((a,h)=>a+Math.PI*h.d,0); // taglio esterno + fori
+  const bb=bbox(out);
+  return {out,areaNet,areaOut,perim,bb,areaM2:areaNet/10000};
+}
+
+/* ═══════════ PARSER DXF MINIMALE (scritto da zero, nessuna dipendenza) ═══════════
+   Entità: LWPOLYLINE, POLYLINE/VERTEX, LINE, CIRCLE, ARC, SPLINE(campionata).
+   Ritorna { contorno:[{x,y}...], fori:[{cx,cy,d}], skip:[entità saltate], unit }.
+   Fallisce visibile: ciò che non capisce lo elenca in skip, non lo inventa. */
+function parseDXF(text){
+  const lines=text.split(/\r\n|\r|\n/);
+  // coppie (code, value)
+  const pairs=[]; for(let i=0;i+1<lines.length;i+=2){ pairs.push([parseInt(lines[i].trim(),10), lines[i+1].trim()]); }
+  const ents=[]; let i=0;
+  // trova ENTITIES
+  while(i<pairs.length && !(pairs[i][0]===2 && pairs[i][1]==='ENTITIES')) i++;
+  // unità dal header ($INSUNITS): 1=inch,4=mm,5=cm,6=m — default mm
+  let insunits=4;
+  for(let h=0;h<pairs.length;h++){ if(pairs[h][1]==='$INSUNITS' && pairs[h+2]) { insunits=parseInt(pairs[h+2][1],10)||4; break; } }
+  const unitToCm={1:2.54,4:0.1,5:1,6:100,0:0.1}[insunits] ?? 0.1;
+  // scorri entità
+  const skip=[]; const polylines=[]; const circles=[]; const lineSegs=[]; const arcs=[]; const splines=[];
+  while(i<pairs.length){
+    if(pairs[i][0]===0){
+      const type=pairs[i][1]; i++;
+      const ent={type,codes:{}}; const multi={10:[],20:[],42:[]};
+      while(i<pairs.length && pairs[i][0]!==0){
+        const [c,v]=pairs[i];
+        if(c===10||c===20||c===11||c===21||c===40||c===41||c===42||c===50||c===51||c===70||c===90) {
+          if(c===10) multi[10].push(parseFloat(v));
+          else if(c===20) multi[20].push(parseFloat(v));
+          else if(c===42) multi[42].push(parseFloat(v));
+          else ent.codes[c]=parseFloat(v);
+        }
+        i++;
+      }
+      ent.xs=multi[10]; ent.ys=multi[20]; ent.bulges=multi[42];
+      if(type==='LWPOLYLINE'||type==='POLYLINE'){ polylines.push(ent); }
+      else if(type==='LINE'){ lineSegs.push(ent); }
+      else if(type==='CIRCLE'){ circles.push(ent); }
+      else if(type==='ARC'){ arcs.push(ent); }
+      else if(type==='SPLINE'){ splines.push(ent); }
+      else if(type==='ENDSEC') break;
+      else if(type!=='VERTEX'&&type!=='SEQEND') skip.push(type);
+    } else i++;
+  }
+  // costruisci contorno: preferenza polilinea più lunga; altrimenti catena di LINE; altrimenti spline
+  let contorno=[];
+  const polyPts=[];
+  polylines.forEach(p=>{ const pts=[]; for(let k=0;k<p.xs.length;k++) pts.push({x:p.xs[k],y:p.ys[k]}); if(pts.length>=3) polyPts.push(pts); });
+  splines.forEach(sp=>{ // campiona i control points come polilinea (approssimazione dichiarata)
+    const pts=[]; for(let k=0;k<sp.xs.length;k++) pts.push({x:sp.xs[k],y:sp.ys[k]}); if(pts.length>=3){ polyPts.push(pts); }
+  });
+  if(polyPts.length){ contorno=polyPts.sort((a,b)=>b.length-a.length)[0]; }
+  else if(lineSegs.length>=3){
+    // catena grezza: ordina per prossimità
+    const segs=lineSegs.map(l=>({a:{x:l.xs[0],y:l.ys[0]},b:{x:l.xs[1],y:l.ys[1]}}));
+    let cur=segs.shift(); const chain=[cur.a,cur.b];
+    while(segs.length){ const last=chain[chain.length-1];
+      let bi=-1,bd=1e9,flip=false;
+      segs.forEach((s,idx)=>{ const da=Math.hypot(s.a.x-last.x,s.a.y-last.y), db=Math.hypot(s.b.x-last.x,s.b.y-last.y);
+        if(da<bd){bd=da;bi=idx;flip=false;} if(db<bd){bd=db;bi=idx;flip=true;} });
+      const s=segs.splice(bi,1)[0]; chain.push(flip?s.a:s.b);
+    }
+    contorno=chain;
+  }
+  // fori = cerchi
+  const fori=circles.map(c=>({cx:c.codes[10]??0, cy:c.codes[20]??0, d:(c.codes[40]||1)*2}));
+  return {contorno, fori, circlesRaw:circles, unitToCm, skip:[...new Set(skip)], nPoly:polyPts.length, nLine:lineSegs.length, nArc:arcs.length, nSpline:splines.length};
+}
+function applyDXF(text){
+  const st=document.getElementById('dxfStatus'); st.style.display='block';
+  try{
+    const r=parseDXF(text);
+    if(!r.contorno || r.contorno.length<3){ st.textContent='✗ Nessun contorno chiuso riconosciuto nel DXF. Entità trovate: '+(r.skip.join(', ')||'nessuna utile')+'. Serve una polilinea o una catena di linee.'; return; }
+    const k=r.unitToCm;
+    // centra
+    const pts=r.contorno.map(p=>({x:p.x*k,y:p.y*k}));
+    const cx=pts.reduce((a,p)=>a+p.x,0)/pts.length, cy=pts.reduce((a,p)=>a+p.y,0)/pts.length;
+    cfg.libero=pts.map(p=>({x:+(p.x-cx).toFixed(1),y:+(p.y-cy).toFixed(1)}));
+    cfg.fori=r.fori.map(f=>({cx:+((f.cx*k)-cx).toFixed(1), cy:+((f.cy*k)-cy).toFixed(1), d:+(f.d*k).toFixed(1)}));
+    cfg.shape='LIBERO';
+    renderFori(); drawPolyEditor(); refresh();
+    let msg=`✓ DXF importato: ${cfg.libero.length} vertici, ${cfg.fori.length} fori. Unità DXF → cm (×${k}).`;
+    if(r.nSpline) msg+=` ⚠ ${r.nSpline} spline campionate (fedeli entro tolleranza).`;
+    if(r.skip.length) msg+=` ⚠ Entità saltate: ${r.skip.join(', ')} — verifica che il profilo sia completo.`;
+    st.textContent=msg;
+  }catch(err){ st.textContent='✗ Lettura DXF fallita: '+err.message+'. File non standard o corrotto.'; }
+}
+
+/* ═══════════ THREE.JS ═══════════ */
+const viewer=document.getElementById('viewer');
+const scene=new THREE.Scene();
+const camera=new THREE.PerspectiveCamera(38,1,0.1,1000);
+const renderer=new THREE.WebGLRenderer({antialias:true,alpha:true});
+renderer.setPixelRatio(Math.min(window.devicePixelRatio,2));
+viewer.appendChild(renderer.domElement);
+scene.add(new THREE.AmbientLight(0xffffff,.65));
+const dl=new THREE.DirectionalLight(0xffffff,.75); dl.position.set(5,10,7); scene.add(dl);
+const dl2=new THREE.DirectionalLight(0xcfd8dc,.3); dl2.position.set(-6,4,-5); scene.add(dl2);
+let group=new THREE.Group(); scene.add(group);
+let rotY=0.7,rotX=0.5,dist=14;
+function sizeViewer(){ const w=viewer.clientWidth,h=viewer.clientHeight; renderer.setSize(w,h); camera.aspect=w/h; camera.updateProjectionMatrix(); }
+window.addEventListener('resize',()=>{sizeViewer();render3D();});
+
+function makeShape(scale){
+  const out=outlinePoints();
+  const s=new THREE.Shape();
+  s.moveTo(out[0].x/scale,out[0].y/scale);
+  for(let i=1;i<out.length;i++) s.lineTo(out[i].x/scale,out[i].y/scale);
+  s.closePath();
+  cfg.fori.forEach(h=>{
+    const hp=holePoints(h), path=new THREE.Path();
+    path.moveTo(hp[0].x/scale,hp[0].y/scale);
+    for(let i=1;i<hp.length;i++) path.lineTo(hp[i].x/scale,hp[i].y/scale);
+    path.closePath(); s.holes.push(path);
+  });
+  return s;
+}
+function build3D(){
+  scene.remove(group); group=new THREE.Group();
+  const S=10;
+  const shape=makeShape(S);
+  const Htot=cfg.strati.reduce((a,s)=>a+s.h,0)/S;
+  let z=-Htot/2;
+  const strati=[...cfg.strati].reverse();     // base per prima
+  // colore da estetica: riconosce il nome del colore scritto e lo applica allo strato superiore
+  function coloreEstetica(txt){
+    if(!txt) return null;
+    const t=txt.toLowerCase();
+    const mappa=[['ross',0xB4433B],['rosso',0xB4433B],['blu',0x3B62B4],['azzurr',0x5B9BD5],
+      ['verde',0x4A9A5B],['nero',0x2B2B2B],['bianc',0xF0F0F0],['giall',0xE8C13D],
+      ['arancio',0xE08A3B],['grigio',0x8A8A8A],['grig',0x8A8A8A],['viola',0x8A5BB4],
+      ['rosa',0xE0879B],['marrone',0x7A5230],['antracite',0x3A3F45]];
+    for(const [k,c] of mappa){ if(t.includes(k)) return c; }
+    return null;
+  }
+  const topColor = coloreEstetica(cfg.estetica);
+  strati.forEach((st,idx)=>{
+    const h=st.h/S;
+    const geo=new THREE.ExtrudeGeometry(shape,{depth:h,bevelEnabled:false,curveSegments:24});
+    const isTop = idx===strati.length-1;
+    const col = (isTop && topColor)?topColor:M()[st.mat].col;
+    const mesh=new THREE.Mesh(geo,new THREE.MeshLambertMaterial({color:col}));
+    mesh.rotation.x=-Math.PI/2; mesh.position.y=z;
+    const edge=new THREE.LineSegments(new THREE.EdgesGeometry(geo,25),new THREE.LineBasicMaterial({color:0x33404d,transparent:true,opacity:.35}));
+    edge.rotation.x=-Math.PI/2; edge.position.y=z;
+    group.add(mesh,edge); z+=h;
+  });
+  const topY=z, bb=bbox(outlinePoints());
+  // canali superficiali
+  if(cfg.can.n>0){
+    const cw=cfg.can.w/S, cd=cfg.can.d/S, spanY=(bb.maxy-bb.miny)/S*0.86;
+    for(let i=1;i<=cfg.can.n;i++){ const x=(bb.minx+(bb.maxx-bb.minx)*i/(cfg.can.n+1))/S;
+      const m=new THREE.Mesh(new THREE.BoxGeometry(cw,cd,spanY),new THREE.MeshLambertMaterial({color:0x2c3944}));
+      m.position.set(x,topY-cd/2+0.001,0); group.add(m);
+    }
+  }
+  // bugne
+  if(cfg.bugnato){
+    const bh=1.6/S, step=0.55, matTop=M()[cfg.strati[0].mat];
+    const nx=Math.max(2,Math.floor((bb.maxx-bb.minx)/S/step)), nz=Math.max(2,Math.floor((bb.maxy-bb.miny)/S/step));
+    const geo=new THREE.SphereGeometry(step*0.42,10,8,0,Math.PI*2,0,Math.PI/2), mat=new THREE.MeshLambertMaterial({color:matTop.col});
+    for(let i=0;i<nx;i++)for(let j=0;j<nz;j++){ const m=new THREE.Mesh(geo,mat);
+      m.position.set((bb.minx/S)+step/2+i*((bb.maxx-bb.minx)/S-step)/Math.max(1,nx-1),topY,(bb.miny/S)+step/2+j*((bb.maxy-bb.miny)/S-step)/Math.max(1,nz-1)); group.add(m);
+    }
+  }
+  scene.add(group);
+  const span=Math.max((bb.maxx-bb.minx)/S,(bb.maxy-bb.miny)/S,Htot);
+  dist=span*2.3+3; render3D();
+}
+function render3D(){
+  camera.position.set(Math.sin(rotY)*Math.cos(rotX)*dist,Math.sin(rotX)*dist,Math.cos(rotY)*Math.cos(rotX)*dist);
+  camera.lookAt(0,0,0); renderer.render(scene,camera);
+}
+let dragging=false,px=0,py=0;
+viewer.addEventListener('pointerdown',e=>{dragging=true;px=e.clientX;py=e.clientY;});
+window.addEventListener('pointermove',e=>{ if(!dragging)return; rotY+=(e.clientX-px)*0.008; rotX=Math.min(1.35,Math.max(-0.2,rotX+(e.clientY-py)*0.006)); px=e.clientX;py=e.clientY; render3D(); });
+window.addEventListener('pointerup',()=>dragging=false);
+viewer.addEventListener('wheel',e=>{e.preventDefault();dist=Math.max(4,Math.min(70,dist+e.deltaY*0.02));render3D();},{passive:false});
+
+/* ═══════════ CALCOLI COSTO PER REPARTO ═══════════ */
+function calc(){
+  const L=getListino(), g=geometryMetrics();
+  const perimM=g.perim/100, areaM2=g.areaM2;
+  const avgCut=cfg.strati.reduce((a,s)=>a+M()[s.mat].cutFactor,0)/cfg.strati.length;
+  // materiale
+  let volTot=0,kgTot=0,costoMat=0;
+  const righeStrati=cfg.strati.map(s=>{
+    const volM3=areaM2*(s.h/100); const volDm3=volM3*1000; const kg=volM3*M()[s.mat].dens; const c=kg*M()[s.mat].eurKg;
+    volTot+=volDm3; kgTot+=kg; costoMat+=c; return {mat:s.mat,h:s.h,vol:volDm3,kg,costo:c};
+  });
+  // lavorazioni per reparto (minuti → €)
+  const R=L.reparti, LV=L.lav; const lav=[];
+  const eur=(min,rep)=>min/60*R[rep].eurOra;
+  const tTaglio=(LV.taglio.base + perimM*LV.taglio.perMetro)*avgCut;
+  lav.push({rep:'taglio',d:`Taglio profilo ${outlinePoints().length} vertici (${fmt(perimM)} m)`,min:tTaglio,eur:eur(tTaglio,'taglio')});
+  if(cfg.fori.length){ const tf=cfg.fori.reduce((a,h)=>a+(LV.foro.base+h.d*LV.foro.perCm)*avgCut,0);
+    lav.push({rep:'fresatura',d:`Foratura ${cfg.fori.length} fori passanti`,min:tf,eur:eur(tf,'fresatura')}); }
+  if(cfg.can.n>0){ const mCan=cfg.can.n*(g.bb.maxy-g.bb.miny)/100*0.86; const tc=mCan*LV.canale.perMetro*avgCut;
+    lav.push({rep:'fresatura',d:`Fresatura ${cfg.can.n} canali (${fmt(mCan)} m)`,min:tc,eur:eur(tc,'fresatura')}); }
+  if(cfg.strati.length>1){ const n=cfg.strati.length-1; const ti=n*areaM2*LV.incollaggio.perM2;
+    lav.push({rep:'incollaggio',d:`Incollaggio ${n} interfacc${n>1?'e':'ia'}`,min:ti,eur:eur(ti,'incollaggio')}); }
+  if(cfg.bugnato){ const tp=areaM2*LV.profilatura.perM2; lav.push({rep:'profilatura',d:`Profilatura bugnata`,min:tp,eur:eur(tp,'profilatura')}); }
+  lav.push({rep:'taglio',d:'Movimentazione blocco',min:L.movimentazioneMin,eur:eur(L.movimentazioneMin,'taglio')});
+  const costoLav=lav.reduce((a,l)=>a+l.eur,0);
+  const setupPz=L.setupEur/Math.max(1,cfg.qty);
+  let costoPz=costoMat+costoLav+setupPz;
+  // ── effetto REGOLE sul costo (consumo materiale × maggiorazione) ──
+  const rr=valutaRegole({g});
+  if(rr.consumo!==1.0){ costoPz += costoMat*(rr.consumo-1); }   // più consumo = più materiale
+  if(rr.maggiora>0){ costoPz *= (1+rr.maggiora/100); }
+  const scaglia=L.scaglie.find(s=>cfg.qty>=s[0])[1];
+  return {g,righeStrati,lav,volTot,kgTot,costoMat,costoLav,setupPz,costoPz,scaglia,areaM2,perimM,regole:rr};
+}
+function similitudine(o,k){
+  let s=0;
+  s+=(o.shape===cfg.shape)?35:0;
+  const vr=Math.min(o.vol,k.volTot)/Math.max(o.vol,k.volTot); s+=vr*30;
+  const nLavCur=k.lav.length-1;
+  s+=(1-Math.min(3,Math.abs(o.nLav-nLavCur))/3)*20;
+  s+=(o.mat===cfg.strati[0].mat)?15:0;
+  return Math.round(s);
+}
+
+function matchForma(k){
+  const cat=CATALOGO_FORME[cfg.cliente]||[];
+  if(!cat.length) return null;
+  const fam=cfg.shape==='DXF'?'LIBERO':cfg.shape;
+  const bb=k.g.bb, W=bb.maxx-bb.minx, H=bb.maxy-bb.miny, holes=cfg.fori.length;
+  const near=(a,b,t)=>Math.abs(a-b)/Math.max(Math.abs(a),Math.abs(b),1)<=t;
+  let best=null;
+  cat.forEach(f=>{
+    let tier='NUOVA';
+    if(f.type==='RETT'&&fam==='RETT'){
+      if(near(f.L,cfg.rett.L,0.03)&&near(f.P,cfg.rett.P,0.03)) tier='IDENTICA';
+      else if(near(f.L,cfg.rett.L,0.18)&&near(f.P,cfg.rett.P,0.18)) tier='SIMILE';
+    } else if(f.type==='POLY'&&fam==='POLY'){
+      if(f.n===cfg.poly.n&&near(f.d,cfg.poly.d,0.03)) tier='IDENTICA';
+      else if(f.n===cfg.poly.n&&near(f.d,cfg.poly.d,0.18)) tier='SIMILE';
+    } else if(f.type==='ELL'&&fam==='ELL'){
+      if(near(f.a,cfg.ell.a,0.03)&&near(f.b,cfg.ell.b,0.03)) tier='IDENTICA';
+      else if(near(f.a,cfg.ell.a,0.18)&&near(f.b,cfg.ell.b,0.18)) tier='SIMILE';
+    } else if(f.type==='LIBERO'&&fam==='LIBERO'){
+      const swap=near(f.W,H,0.03)&&near(f.H,W,0.03);
+      if((near(f.W,W,0.03)&&near(f.H,H,0.03))||swap) tier='IDENTICA';
+      else if(near(f.W,W,0.18)&&near(f.H,H,0.18)) tier='SIMILE';
+    }
+    if(tier==='IDENTICA'&&f.holes!==holes) tier='SIMILE'; // fori diversi → non è lo stesso pezzo
+    if(tier!=='NUOVA'){ if(!best||(tier==='IDENTICA'&&best.tier!=='IDENTICA')) best={...f,tier}; }
+  });
+  return best;
+}
+function renderStrati(){
+  const box=document.getElementById('stratiBox'); box.innerHTML='';
+  cfg.strati.forEach((s,i)=>{
+    const row=document.createElement('div'); row.className='strato-row';
+    const opts=Object.entries(M()).map(([k,m])=>`<option value="${k}" ${k===s.mat?'selected':''}>${m.nome} (${m.dens})</option>`).join('');
+    const lbl=i===0?' — SUP.':(i===cfg.strati.length-1&&cfg.strati.length>1?' — BASE':'');
+    row.innerHTML=`<div class="field"><label>STRATO ${i+1}${lbl}</label><select data-i="${i}" class="stMat">${opts}</select></div>
+      <div class="field"><label>SP. (cm)</label><input type="number" class="stH" data-i="${i}" value="${s.h}" min="1" max="30" step="0.5"></div>
+      <button class="del" data-i="${i}" ${cfg.strati.length===1?'disabled':''}>×</button>`;
+    box.appendChild(row);
+  });
+  box.querySelectorAll('.stMat').forEach(el=>el.onchange=e=>{cfg.strati[+e.target.dataset.i].mat=e.target.value;refresh();});
+  box.querySelectorAll('.stH').forEach(el=>el.oninput=e=>{cfg.strati[+e.target.dataset.i].h=+e.target.value||1;refresh(true);});
+  box.querySelectorAll('.del').forEach(el=>el.onclick=e=>{cfg.strati.splice(+e.target.dataset.i,1);renderStrati();refresh();});
+}
+function renderFori(){
+  const box=document.getElementById('foriBox'); box.innerHTML='';
+  if(!cfg.fori.length){ box.innerHTML='<div class="note-line" style="margin-top:0">Nessun foro.</div>'; }
+  cfg.fori.forEach((h,i)=>{
+    const row=document.createElement('div'); row.className='foro-row';
+    row.innerHTML=`<div class="field"><label>Ø (cm)</label><input type="number" class="fD" data-i="${i}" value="${h.d}" min="0.5" max="40" step="0.5"></div>
+      <div class="field"><label>X (cm)</label><input type="number" class="fX" data-i="${i}" value="${h.cx}" step="1"></div>
+      <div class="field"><label>Y (cm)</label><input type="number" class="fY" data-i="${i}" value="${h.cy}" step="1"></div>
+      <button class="del" data-i="${i}">×</button>`;
+    box.appendChild(row);
+  });
+  box.querySelectorAll('.fD').forEach(el=>el.oninput=e=>{cfg.fori[+e.target.dataset.i].d=+e.target.value||1;refresh();});
+  box.querySelectorAll('.fX').forEach(el=>el.oninput=e=>{cfg.fori[+e.target.dataset.i].cx=+e.target.value||0;refresh();});
+  box.querySelectorAll('.fY').forEach(el=>el.oninput=e=>{cfg.fori[+e.target.dataset.i].cy=+e.target.value||0;refresh();});
+  box.querySelectorAll('.del').forEach(el=>el.onclick=e=>{cfg.fori.splice(+e.target.dataset.i,1);renderFori();refresh();});
+}
+
+/* poly editor */
+const ED_CM=100; // area logica 100×100 cm
+const polySvg=document.getElementById('polyEditor');
+function edToCm(px,py){ const r=polySvg.getBoundingClientRect(); const x=(px-r.left)/r.width*ED_CM-ED_CM/2; const y=-((py-r.top)/r.height*ED_CM-ED_CM/2); return {x:Math.round(x),y:Math.round(y)}; }
+function drawPolyEditor(){
+  let s='';
+  for(let g=0;g<=ED_CM;g+=10){ const p=g/ED_CM*300; s+=`<line x1="${p}" y1="0" x2="${p}" y2="300" stroke="#EAEAE4"/><line x1="0" y1="${p}" x2="300" y2="${p}" stroke="#EAEAE4"/>`; }
+  s+=`<line x1="150" y1="0" x2="150" y2="300" stroke="#D8DCD6"/><line x1="0" y1="150" x2="300" y2="150" stroke="#D8DCD6"/>`;
+  const toPx=p=>({x:(p.x+ED_CM/2)/ED_CM*300,y:(-p.y+ED_CM/2)/ED_CM*300});
+  if(cfg.libero.length){
+    const pxs=cfg.libero.map(toPx);
+    if(pxs.length>=2){ s+=`<polygon points="${pxs.map(p=>p.x+','+p.y).join(' ')}" fill="rgba(14,107,102,.14)" stroke="#0E6B66" stroke-width="1.5"/>`; }
+    pxs.forEach((p,i)=>{ s+=`<circle cx="${p.x}" cy="${p.y}" r="4" fill="#0E6B66"/><text x="${p.x+6}" y="${p.y-6}" font-family="monospace" font-size="9" fill="#0E6B66">${i+1}</text>`; });
+  }
+  polySvg.innerHTML=s;
+  document.getElementById('polyCount').textContent=cfg.libero.length+' vertici';
+}
+polySvg.addEventListener('pointerdown',e=>{ if(cfg.shape!=='LIBERO')return; const p=edToCm(e.clientX,e.clientY); cfg.libero.push(p); drawPolyEditor(); refresh(); });
+document.getElementById('polyClear').onclick=()=>{cfg.libero=[];drawPolyEditor();refresh();};
+document.getElementById('polyUndo').onclick=()=>{cfg.libero.pop();drawPolyEditor();refresh();};
+
+function refresh(skip){
+  // sync numerici
+  cfg.rett={L:+rL.value||10,P:+rP.value||10,R:+rR.value||0};
+  cfg.poly={n:Math.max(3,+pN.value||3),d:+pD.value||10,rot:+pRot.value||0};
+  cfg.ell={a:+eA.value||10,b:+eB.value||10};
+  cfg.can={n:+canN.value||0,w:+canW.value||1,d:+canD.value||1};
+  cfg.bugnato=document.getElementById('bugnato').value==='si';
+  cfg.estetica=document.getElementById('estetica').value.trim();
+  cfg.qty=+qty.value||1; cfg.cliente=cliente.value;
+  document.querySelectorAll('.shape-tab').forEach(t=>t.classList.toggle('active',t.dataset.shape===cfg.shape));
+  ['RETT','POLY','ELL','LIBERO','DXF'].forEach(k=>document.getElementById('param'+k).style.display=(cfg.shape===k?'block':'none'));
+
+  // avviso estetica fuori-perimetro
+  const en=document.getElementById('esteticaNote');
+  if(cfg.estetica){ en.style.display='block';
+    en.textContent = /massa|colorat/i.test(cfg.estetica)
+      ? '⚠ Colore in massa = partita speciale schiuma (minimi/sovrapprezzo fornitore) — da confermare.'
+      : '⚠ Se «'+cfg.estetica+'» è rivestimento/fodera è probabilmente fuori perimetro DT Group (fanno il pressato, non la fodera). Da chiarire col cliente.';
+  } else en.style.display='none';
+
+  const k=calc(), Htot=cfg.strati.reduce((a,s)=>a+s.h,0);
+  const bb=k.g.bb;
+  document.getElementById('dimStrip').innerHTML=
+    `<span>INGOMBRO <b>${Math.round(bb.maxx-bb.minx)}×${Math.round(bb.maxy-bb.miny)}×${Htot} cm</b></span><span>VOL <b>${fmt(k.volTot)} dm³</b></span><span>PESO <b>${fmt(k.kgTot)} kg</b></span><span>TAGLIO <b>${fmt(k.perimM)} m</b></span>`;
+
+  // distinta
+  const R=getListino().reparti;
+  let d=`<table><tr><th>COMPONENTE</th><th>REPARTO</th><th>KG / MIN</th><th>€/PZ</th></tr>`;
+  k.righeStrati.forEach(r=>{ d+=`<tr><td class="desc"><span class="swatch" style="background:${M()[r.mat].hex}"></span>${M()[r.mat].nome} · ${r.h} cm</td><td>materiale</td><td>${fmt(r.kg)} kg</td><td>${fmt(r.costo)}</td></tr>`; });
+  k.lav.forEach(l=>{ d+=`<tr><td class="desc">⚙ ${l.d}</td><td>${R[l.rep].nome}</td><td>${fmt(l.min)} min</td><td>${fmt(l.eur)}</td></tr>`; });
+  d+=`<tr><td class="desc">Setup commessa (${getListino().setupEur}€ / ${cfg.qty} pz)</td><td></td><td></td><td>${fmt(k.setupPz)}</td></tr>`;
+  d+=`<tr class="tot"><td class="desc">COSTO INDUSTRIALE / PZ</td><td></td><td></td><td>${fmt(k.costoPz)} €</td></tr></table>`;
+  document.getElementById('distintaBox').innerHTML=d;
+
+  // ── esito REGOLE sul pezzo ──
+  const rr=k.regole; const reb=document.getElementById('regoleEsitoBox');
+  if(!REGOLE.length){ reb.innerHTML=''; }
+  else {
+    const attive=rr.esiti.filter(e=>e.stato==='attiva'||e.stato==='blocco');
+    let h='';
+    if(rr.violMat){ h+=`<div class="regola" style="opacity:1;border:2px solid #B4433B;background:#FBEEEC;margin-bottom:8px"><div class="r-tag" style="color:#B4433B">⛔ VIOLAZIONE</div><div class="r-body">Il materiale scelto (${rr.violMat}) è vietato da una regola attiva. Non producibile così.</div></div>`; }
+    if(rr.bloccato){ h+=`<div class="regola" style="opacity:1;border:2px solid #B4433B;background:#FBEEEC;margin-bottom:8px"><div class="r-tag" style="color:#B4433B">⛔ BLOCCO</div><div class="r-body">${rr.bloccato}</div></div>`; }
+    if(attive.length){
+      h+=`<div class="regola" style="opacity:1;border:2px solid var(--amber);background:var(--amber-soft)"><div class="r-tag" style="color:#9A6A1A">REGOLE ATTIVE SU QUESTO PEZZO</div><div class="r-body" style="font-size:12.5px">`+
+        attive.map(e=>`▸ ${e.txt} <span style="color:#9A6A1A">("${e.frase}")</span>`).join('<br>')+
+        (rr.macchina!=='A (base)'?`<br><b>Macchina: ${rr.macchina}</b>`:'')+
+        (rr.sostMat?`<br><b>Materiale imposto: ${rr.sostMat}</b>`:'')+
+        `</div></div>`;
+    } else if(!rr.violMat && !rr.bloccato){
+      h=`<div class="regola" style="opacity:1;border:1px solid var(--petrol)"><div class="r-tag" style="color:var(--petrol)">✓ NESSUNA REGOLA ATTIVA</div><div class="r-body">Il pezzo non attiva nessuna regola: costo e materiale base.</div></div>`;
+    }
+    reb.innerHTML=h;
+  }
+
+  // cascata
+  const cli=CLIENTI[cfg.cliente];
+  const listino=k.costoPz*(1+cli.margine)*(1-k.scaglia);
+  const sims=cli.storico.map(o=>({...o,sim:similitudine(o,k)})).sort((a,b)=>b.sim-a.sim);
+  const best=sims[0];
+  let anchored=null,motivo='';
+  if(best&&best.sim>=60){
+    const volR=Math.pow(k.volTot/best.vol,0.85), dLav=(k.lav.length-1)-best.nLav;
+    anchored=(best.prezzo*volR + dLav*0.35)*(1-k.scaglia*0.5);
+    motivo=`ANCORAGGIO: ${fmt(best.prezzo)}€ (${best.data}) × fattore volume ${fmt(volR)}${dLav!==0?(dLav>0?` + ${dLav} lav. (+${fmt(dLav*0.35)}€)`:` − ${-dLav} lav. (${fmt(dLav*0.35)}€)`):''} · scaglia −${Math.round(k.scaglia*50)}%`;
+  }
+  const hasAQ=cli.accordo&&cli.accordo.shapeFam===cfg.shape;
+  const aqPrice=hasAQ?listino*(1-cli.accordo.sconto):null;
+  let finale,applied;
+  if(hasAQ){finale=aqPrice;applied='AQ';}
+  else if(anchored!==null){finale=anchored;applied='ST';}
+  else {finale=listino;applied='LI';}
+  if(finale<k.costoPz*1.05){finale=k.costoPz*1.05;motivo+=' · ⚠ FLOOR margine minimo 5%';}
+
+  const reg=(tag,body,price,isA)=>`<div class="regola ${isA?'applied':''}">${isA?'<span class="applied-badge">APPLICATA</span>':''}<div class="r-tag">${tag}</div><div class="r-body">${body}</div><span class="r-price">${price!==null?fmt(price)+' €':'n/d'}</span></div>`;
+  document.getElementById('cascataBox').innerHTML=
+    reg('1 · ACCORDO QUADRO',hasAQ?`${cli.accordo.rif} — sconto ${cli.accordo.sconto*100}%`:`Nessun accordo per ${cli.nome} su questa forma`,aqPrice,applied==='AQ')+
+    reg('2 · STORICO PER SIMILITUDINE',best?`Match ${best.sim}% — "${best.desc}"`:'Nessuno storico cliente',anchored,applied==='ST')+
+    reg('3 · LISTINO + MARGINE SETTORE',`Costo ${fmt(k.costoPz)}€ + margine ${cli.settore} ${Math.round(cli.margine*100)}% − scaglia ${Math.round(k.scaglia*100)}%`,listino,applied==='LI');
+  document.getElementById('storicoBox').innerHTML=sims.length?sims.map((o,i)=>
+    `<div class="storico-item ${i===0?'best':''}"><div class="s-head"><span>${o.desc}</span><span class="s-sim">${o.sim}%</span></div><div class="s-desc">${o.data} · ${fmt(o.vol)} dm³ · ${o.nLav} lav. · <b>${fmt(o.prezzo)} €/pz</b></div></div>`).join('')
+    :'<div class="note-line">Cliente senza storico: listino base + margine settore.</div>';
+  document.getElementById('motivoBox').style.display=motivo?'block':'none';
+  document.getElementById('motivoBox').textContent=motivo;
+  document.getElementById('fpUnit').textContent=fmt(finale)+' €';
+  document.getElementById('fpTot').textContent=fmt(finale*cfg.qty)+' €';
+
+  // riconoscimento forma cliente
+  const mf=matchForma(k);
+  const fmb=document.getElementById('formaMatchBox');
+  if(!mf){
+    fmb.innerHTML=`<div class="regola"><div class="r-tag">FORMA NUOVA</div><div class="r-body">Nessuna forma equivalente in catalogo per ${cli.nome}. Va creato un nuovo codice articolo.</div></div>`;
+  } else if(mf.tier==='IDENTICA'){
+    fmb.innerHTML=`<div class="regola applied"><span class="applied-badge">GIÀ PRODOTTA</span><div class="r-tag" style="color:var(--petrol)">✓ FORMA IDENTICA IN CATALOGO</div><div class="r-body">Commessa <b>${mf.commessa}</b> (${mf.data}) · codice art. <b>${mf.codice}</b> · prezzo storico <b>${fmt(mf.prezzo)} €/pz</b>.<br>→ Riusa codice e distinta esistenti invece di ri-preventivare.</div></div>`;
+  } else {
+    fmb.innerHTML=`<div class="regola" style="opacity:1;border:2px solid var(--amber);background:var(--amber-soft)"><span class="applied-badge" style="background:var(--amber);color:var(--ink)">DA VERIFICARE</span><div class="r-tag" style="color:#9A6A1A">≈ FORMA SIMILE</div><div class="r-body">Simile a commessa <b>${mf.commessa}</b> (${mf.data}, codice ${mf.codice}, ${fmt(mf.prezzo)} €/pz), ma dimensioni diverse.<br>Verifica col cliente se è una variante di quel pezzo o una forma nuova.</div></div>`;
+  }
+
+  // ── DATI MANCANTI: deducibile dallo storico vs bloccante ──
+  // minimo indispensabile: forma + misure + almeno uno strato con mat+spessore + quantità
+  const mancanti=[];
+  const proposte=[];
+  const strato0=cfg.strati[0];
+  if(!strato0 || !strato0.mat){
+    // materiale mancante: deducibile se c'è una forma nota per il cliente
+    if(mf && mf.mat){ proposte.push({campo:'Materiale',valore:M()[mf.mat]?mf.mat:mf.mat,fonte:mf.commessa}); }
+    else mancanti.push('Materiale (nessuno storico da cui dedurlo)');
+  }
+  if(!strato0 || !strato0.h || strato0.h<=0){
+    if(mf && mf.h){ proposte.push({campo:'Spessore',valore:mf.h+' cm',fonte:mf.commessa}); }
+    else mancanti.push('Spessore strato');
+  }
+  if(cfg.qty<1) mancanti.push('Quantità');
+
+  const mb=document.getElementById('mancantiBox');
+  let mbHtml='';
+  if(proposte.length){
+    mbHtml+=`<div class="regola" style="opacity:1;border:2px solid var(--amber);background:var(--amber-soft)"><span class="applied-badge" style="background:var(--amber);color:var(--ink)">DA CONFERMARE</span><div class="r-tag" style="color:#9A6A1A">DATI PROPOSTI DALLO STORICO CLIENTE</div><div class="r-body">`+
+      proposte.map(p=>`${p.campo}: <b>${p.valore}</b> <span style="color:#9A6A1A">(come ${p.fonte} — conferma o correggi)</span>`).join('<br>')+
+      `</div></div>`;
+  }
+  if(mancanti.length){
+    mbHtml+=`<div class="regola" style="opacity:1;border:2px solid #B4433B;background:#FBEEEC"><span class="applied-badge" style="background:#B4433B">DATO MANCANTE</span><div class="r-tag" style="color:#B4433B">NON DEDUCIBILE — DECISIONE OPERATORE</div><div class="r-body">`+
+      mancanti.map(m=>'• '+m).join('<br>')+
+      `<br><span style="color:#8A4444;font-style:italic">Il sistema non inventa: inserisci un valore consapevole per procedere.</span></div></div>`;
+  }
+  if(!proposte.length && !mancanti.length){
+    mbHtml=`<div class="regola" style="opacity:1;border:1px solid var(--petrol)"><div class="r-tag" style="color:var(--petrol)">✓ DATI COMPLETI</div><div class="r-body">Tutti i dati necessari sono presenti. Configurazione pronta per l'offerta.</div></div>`;
+  }
+  mb.innerHTML=mbHtml;
+
+  drawSVG(k,Htot);
+  build3D();
+  buildQR(k,Htot);
+}
+
+/* ═══════════ QR SCHEDA TECNICA (offline, senza prezzo) ═══════════ */
+function buildQR(k,Htot){
+  const out=k.g.out;
+  // profilo quotato compatto: vertici in cm, arrotondati
+  const prof=out.map(p=>[Math.round(p.x),Math.round(p.y)]);
+  const scheda={
+    t:'EXPAN-SCHEDA', v:1,
+    forma:cfg.shape,
+    ingombro_cm:[Math.round(k.g.bb.maxx-k.g.bb.minx),Math.round(k.g.bb.maxy-k.g.bb.miny),Htot],
+    strati:cfg.strati.map(s=>({mat:s.mat,dens:M()[s.mat].dens,h:s.h})),
+    fori:cfg.fori.map(f=>({d:f.d,x:f.cx,y:f.cy})),
+    canali:cfg.can.n>0?{n:cfg.can.n,w:cfg.can.w,d:cfg.can.d}:null,
+    bugnato:cfg.bugnato, estetica:cfg.estetica||null,
+    qta:cfg.qty, cliente:CLIENTI[cfg.cliente].nome,
+    profilo_cm:prof
+    // NOTA: nessun campo prezzo/valore, per scelta
+  };
+  const json=JSON.stringify(scheda);
+  const box=document.getElementById('qrBox'); box.innerHTML='';
+  try{
+    if(typeof QRCode!=='undefined'){
+      // QRCode.js: correction L per stare dietro a payload lunghi (sagome complesse)
+      new QRCode(box,{text:json,width:150,height:150,correctLevel:QRCode.CorrectLevel.L});
+    } else { box.innerHTML='<div class="note-line">Libreria QR non caricata (serve rete per il CDN).</div>'; }
+  }catch(err){
+    box.innerHTML='<div class="note-line">Profilo troppo denso per un QR offline ('+json.length+' caratteri). In produzione diventa un link-commessa e il QR resta piccolo.</div>';
+  }
+  // riepilogo leggibile
+  const mats=[...new Set(cfg.strati.map(s=>s.mat))].join(', ');
+  document.getElementById('qrData').innerHTML=
+    `forma: <b>${cfg.shape}</b><br>ingombro: <b>${scheda.ingombro_cm.join('×')} cm</b><br>strati: <b>${cfg.strati.length}</b> (${mats})<br>fori: <b>${cfg.fori.length}</b> · canali: <b>${cfg.can.n}</b><br>qta: <b>${cfg.qty} pz</b><br>cliente: <b>${scheda.cliente}</b><br>payload: <b>${json.length}</b> caratteri`;
+}
+
+/* ═══════════ TAVOLA 2D ═══════════ */
+function drawSVG(k,Htot){
+  const out=k.g.out, bb=k.g.bb, W=bb.maxx-bb.minx, H=bb.maxy-bb.miny;
+  const sc=210/Math.max(W,H), pad=42, w=W*sc, h=H*sc;
+  const tx=x=>(x-bb.minx)*sc+pad, ty=y=>(bb.maxy-y)*sc+pad;
+  let s=`<svg width="${w+pad*2}" height="${h+pad*2}" font-family="IBM Plex Mono,monospace" font-size="10">`;
+  s+=`<polygon points="${out.map(p=>tx(p.x)+','+ty(p.y)).join(' ')}" fill="rgba(14,107,102,.06)" stroke="#1C2430" stroke-width="1.5"/>`;
+  cfg.fori.forEach(f=>{ s+=`<circle cx="${tx(f.cx)}" cy="${ty(f.cy)}" r="${f.d/2*sc}" fill="#fff" stroke="#0E6B66" stroke-width="1.2"/>`; });
+  for(let i=1;i<=cfg.can.n;i++){ const x=bb.minx+W*i/(cfg.can.n+1); s+=`<line x1="${tx(x)}" y1="${ty(bb.maxy)+h*0.07}" x2="${tx(x)}" y2="${ty(bb.miny)-h*0.07}" stroke="#0E6B66" stroke-dasharray="4 3"/>`; }
+  s+=`<line x1="${pad}" y1="${pad-14}" x2="${pad+w}" y2="${pad-14}" stroke="#5A6570"/><text x="${pad+w/2}" y="${pad-19}" text-anchor="middle">${Math.round(W)} cm</text>`;
+  s+=`<line x1="${pad-14}" y1="${pad}" x2="${pad-14}" y2="${pad+h}" stroke="#5A6570"/><text x="${pad-19}" y="${pad+h/2}" text-anchor="middle" transform="rotate(-90 ${pad-19} ${pad+h/2})">${Math.round(H)} cm</text></svg>`;
+  document.getElementById('svgPianta').innerHTML=s;
+  // sezione
+  const sc2=210/Math.max(W,Htot*2.2), W2=W*sc2; let y=26;
+  let z=`<svg width="${W2+90}" height="${Htot*sc2*2+50}" font-family="IBM Plex Mono,monospace" font-size="10">`;
+  cfg.strati.forEach(st=>{ const hh=st.h*sc2*2; z+=`<rect x="30" y="${y}" width="${W2}" height="${hh}" fill="${M()[st.mat].hex}" stroke="#1C2430"/><text x="${W2+36}" y="${y+hh/2+3}">${st.h}cm ${st.mat}</text>`; y+=hh; });
+  z+=`<line x1="30" y1="${y+8}" x2="${30+W2}" y2="${y+8}" stroke="#5A6570"/><text x="${30+W2/2}" y="${y+20}" text-anchor="middle">${Math.round(W)} cm · H ${Htot} cm</text></svg>`;
+  document.getElementById('svgSezione').innerHTML=z;
+}
+
+/* ═══════════ PARSER AI ═══════════ */
+const ESEMPIO="Buongiorno, ci serve un pannello triangolare lato 40 cm con un foro centrale da 12, materiale HR35 spessore 6 cm, servono 100 pezzi. In alternativa valutate anche versione esagonale diametro 45. Grazie, uff. tecnico Ospedaliera Med";
+document.getElementById('btnEsempio').onclick=()=>{document.getElementById('richiesta').value=ESEMPIO;};
+/* ═══════════ PARSER LOCALE (funziona ovunque, senza server) ═══════════ */
+function parseLocale(txt){
+  const t=txt.toLowerCase();
+  const num=(re)=>{ const m=t.match(re); return m?parseFloat(m[1].replace(',','.')):null; };
+  const out={dubbi:[]};
+
+  // ---- FORMA ----
+  const polyMap=[['triangol',3],['quadrat',4],['pentagon',5],['esagon',6],['ettagon',7],['ottagon',8],['dodecagon',12]];
+  let nLati=null;
+  for(const [k,n] of polyMap){ if(t.includes(k)){ nLati=n; break; } }
+  const nLatiEspl=num(/(\d+)\s*lati/);           // "12 lati"
+  if(nLatiEspl) nLati=nLatiEspl;
+
+  if(nLati){
+    out.shape='POLY';
+    // lato o diametro
+    const d=num(/(?:lato|diametro|ø|diam\.?)\s*(?:di\s*)?(\d+[.,]?\d*)/) || num(/(\d+[.,]?\d*)\s*cm/);
+    out.poly={n:nLati, d:d||45, rot:0};
+  } else if(/ovale|ellitt|ellisse/.test(t)){
+    out.shape='ELL';
+    const a=num(/(\d+[.,]?\d*)\s*[x×]\s*\d/)||70, b=num(/\d+\s*[x×]\s*(\d+[.,]?\d*)/)||45;
+    out.ell={a,b};
+  } else if(/rettangol|lastra|quadr|pannello squadrat|piastra/.test(t)){
+    out.shape='RETT';
+    const L=num(/(\d+[.,]?\d*)\s*[x×]\s*\d/)||num(/lungh\w*\s*(\d+)/)||60;
+    const P=num(/\d+\s*[x×]\s*(\d+[.,]?\d*)/)||num(/largh\w*\s*(\d+)/)||40;
+    out.rett={L,P,R:num(/raggio\s*(\d+)/)||0};
+  } else if(/sagoma|irregolar|libera|profilo libero/.test(t)){
+    out.shape='LIBERO';
+  }
+
+  // ---- STRATI / MATERIALE ----
+  const matMap=[['memory','MEMORY50'],['gel','GEL55'],['hr35','HR35'],['hr 35','HR35'],['hr30','HR30'],['hr 30','HR30'],['hr','HR30'],['pu','PU25'],['poliuretano','PU25']];
+  const strati=[];
+  // spessore associato: "spessore 6", "6 cm", "sp 6"
+  const spess=num(/(?:spessore|spess\.?|sp\.?|h)\s*(?:di\s*)?(\d+[.,]?\d*)/);
+  let matTrovato=null;
+  for(const [k,v] of matMap){ if(t.includes(k)){ matTrovato=v; break; } }
+  if(matTrovato){ strati.push({materiale:matTrovato, spessore_cm:spess||5}); }
+  if(strati.length) out.strati=strati;
+
+  // ---- FORI ----
+  const fori=[];
+  const foroD=num(/foro\s*(?:centrale\s*)?(?:da|di|ø|passante\s*ø?)?\s*(\d+[.,]?\d*)/) || num(/ø\s*(\d+[.,]?\d*)/);
+  if(foroD){
+    const centrale=/centr|al centro|in mezzo/.test(t);
+    fori.push({d:foroD, cx:0, cy:0});
+    if(!centrale) out.dubbi.push('foro: posizione non specificata, assunto centrale');
+  }
+  out.fori=fori;
+
+  // ---- QUANTITÀ ----
+  const q=num(/(\d+)\s*(?:pezzi|pz|pezz|unit)/) || num(/servono\s*(\d+)/) || num(/n[.°]?\s*(\d+)/);
+  if(q) out.quantita=q;
+
+  // ---- COLORE ----
+  const colori=['rosso','ross','blu','azzurro','verde','nero','bianco','bianc','giallo','arancio','grigio','viola','rosa','marrone','antracite'];
+  for(const c of colori){ if(t.includes(c)){ out.estetica=c.replace('ross','rosso').replace('bianc','bianco'); out.dubbi.push('colore: verificare se in massa o rivestimento'); break; } }
+
+  // ---- CLIENTE ----
+  if(/materassificio veneto|matven/.test(t)) out.cliente='MATVEN';
+  else if(/nautica adria|nauadr/.test(t)) out.cliente='NAUADR';
+  else if(/ospedaliera med|medsrl|ospedaliera/.test(t)) out.cliente='MEDSRL';
+
+  // ---- ALTERNATIVA ----
+  const alt=t.match(/in alternativa[^.]*/);
+  if(alt) out.dubbi.push('alternativa proposta: '+alt[0].replace('in alternativa','').trim());
+
+  return out;
+}
+
+function applicaParametri(j){
+  if(j.shape) cfg.shape=j.shape;
+  if(j.rett){rL.value=j.rett.L??60;rP.value=j.rett.P??40;rR.value=j.rett.R??4;}
+  if(j.poly){pN.value=j.poly.n??6;pD.value=j.poly.d??45;pRot.value=j.poly.rot??0;}
+  if(j.ell){eA.value=j.ell.a??70;eB.value=j.ell.b??45;}
+  if(Array.isArray(j.strati)&&j.strati.length) cfg.strati=j.strati.map(s=>({mat:s.materiale,h:s.spessore_cm}));
+  cfg.fori=Array.isArray(j.fori)?j.fori.map(f=>({d:f.d||3,cx:f.cx||0,cy:f.cy||0})):[];
+  if(j.canali){canN.value=j.canali.num||0;if(j.canali.larghezza_cm)canW.value=j.canali.larghezza_cm;if(j.canali.profondita_cm)canD.value=j.canali.profondita_cm;}
+  if(j.bugnato!==undefined) document.getElementById('bugnato').value=j.bugnato?'si':'no';
+  if(j.estetica!==undefined) document.getElementById('estetica').value=j.estetica||'';
+  if(j.quantita) qty.value=j.quantita;
+  if(j.cliente) cliente.value=j.cliente;
+  renderStrati(); renderFori(); refresh();
+}
+
+document.getElementById('btnParse').onclick=async()=>{
+  const txt=document.getElementById('richiesta').value.trim(); if(!txt)return;
+  const btn=document.getElementById('btnParse'), st=document.getElementById('parseStatus');
+  btn.disabled=true; st.style.display='block'; document.getElementById('dubbiBox').style.display='none';
+
+  // 1) PARSER LOCALE — sempre, funziona ovunque
+  st.textContent='› interpretazione…';
+  const locale=parseLocale(txt);
+  applicaParametri(locale);
+  let dubbi=locale.dubbi||[];
+  st.textContent='✓ interpretata (locale) — verifica i campi';
+
+  // 2) se il back-end AI è disponibile, rifinisce (solo su server con DeepSeek)
+  try{
+    const r=await fetch("/api/interpreta",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({testo:txt})});
+    if(r.ok){
+      const j=await r.json();
+      applicaParametri(j);
+      dubbi=j.dubbi||dubbi;
+      st.textContent='✓ interpretata (AI) — verifica i campi e i punti in giallo';
+    }
+  }catch(e){ /* nessun back-end: resta il risultato locale, va benissimo */ }
+
+  if(dubbi.length){ const db=document.getElementById('dubbiBox'); db.innerHTML='<b>DA CONFERMARE COL CLIENTE</b><br>'+dubbi.map(x=>'• '+x).join('<br>'); db.style.display='block'; }
+  btn.disabled=false;
+};
+
+/* ═══════════ BINDING ═══════════ */
+document.querySelectorAll('.shape-tab').forEach(t=>t.addEventListener('click',()=>{cfg.shape=t.dataset.shape;refresh();}));
+['rL','rP','rR','pN','pD','pRot','eA','eB','canN','canW','canD','qty','estetica'].forEach(id=>document.getElementById(id).addEventListener('input',()=>refresh(true)));
+['bugnato','cliente'].forEach(id=>document.getElementById(id).addEventListener('change',()=>refresh(true)));
+document.getElementById('addStrato').onclick=()=>{ if(cfg.strati.length<5){cfg.strati.push({mat:'HR30',h:4});renderStrati();refresh();} };
+document.getElementById('addForo').onclick=()=>{ cfg.fori.push({d:6,cx:0,cy:0});renderFori();refresh(); };
+document.getElementById('dxfFile').addEventListener('change',e=>{
+  const f=e.target.files[0]; if(!f)return;
+  const rd=new FileReader(); rd.onload=ev=>applyDXF(ev.target.result); rd.readAsText(f);
+});
+
+/* ═══════════ UI REGOLE ═══════════ */
+function renderRegole(){
+  const box=document.getElementById('regoleBox');
+  if(!REGOLE.length){ box.innerHTML='<div class="note-line" style="margin-top:0">Nessuna regola. Dichiarane una sopra.</div>'; return; }
+  box.innerHTML=REGOLE.map(r=>{
+    const cond=r.condizioni.map(descrCondR).join(r.connettore==='AND'?' E ':' O ');
+    const az=r.azioni.map(descrAzR).join(' · ');
+    return `<div class="regola" style="opacity:1;margin-bottom:8px;position:relative"><button class="del" data-id="${r.id}" style="position:absolute;top:8px;right:8px;width:26px;height:26px;border:none;background:#F0EFEB;border-radius:6px;color:#8A4444;font-weight:700;cursor:pointer">×</button><div class="r-body" style="font-size:13px">"${r.frase}"</div><div class="r-tag" style="margin-top:4px"><span style="color:var(--petrol)">SE</span> ${cond} <span style="color:var(--petrol)">ALLORA</span> ${az}</div></div>`;
+  }).join('');
+  box.querySelectorAll('.del').forEach(b=>b.onclick=e=>{ REGOLE=REGOLE.filter(x=>x.id!=e.target.dataset.id); renderRegole(); refresh(); });
+}
+document.getElementById('btnCapisci').onclick=()=>{
+  const frase=document.getElementById('fraseRegola').value.trim();
+  const box=document.getElementById('capitoBox'), out=document.getElementById('capitoRegola');
+  if(!frase){ box.style.display='none'; return; }
+  const r=interpretaRegola(frase); box.style.display='block';
+  if(!r.condizioni||!r.condizioni.length||!r.azioni||!r.azioni.length){
+    out.innerHTML='<span style="color:#B4433B">✗ Non ho capito:</span><br>'+(r.err||['errore']).map(e=>'• '+e).join('<br>');
+    document.getElementById('btnCongela').style.display='none'; regolaPending=null; return;
+  }
+  const cond=r.condizioni.map(descrCondR).join(r.connettore==='AND'?' <span style="color:var(--petrol)">E</span> ':' <span style="color:var(--petrol)">O</span> ');
+  out.innerHTML=`<span style="color:var(--petrol);font-weight:700">SE</span> ${cond}<br><span style="color:var(--petrol);font-weight:700">ALLORA</span> ${r.azioni.map(descrAzR).join(' · ')}`;
+  document.getElementById('btnCongela').style.display=''; regolaPending={frase,condizioni:r.condizioni,connettore:r.connettore,azioni:r.azioni};
+};
+document.getElementById('btnCongela').onclick=()=>{
+  if(!regolaPending) return;
+  REGOLE.push({id:Date.now(),...regolaPending}); regolaPending=null;
+  document.getElementById('capitoBox').style.display='none';
+  document.getElementById('fraseRegola').value='';
+  renderRegole(); refresh();
+};
+document.getElementById('esR1').onclick=()=>{document.getElementById('fraseRegola').value='se la larghezza supera 47 allora usa macchina B consumo 1.15';};
+document.getElementById('esR2').onclick=()=>{document.getElementById('fraseRegola').value='se altezza maggiore di 75 allora usa materiale HR35';};
+document.getElementById('esR3').onclick=()=>{document.getElementById('fraseRegola').value='se colore rosso allora maggiora del 12%';};
+
+/* ═══════════ TESTATA OFFERTA ═══════════ */
+function initTestata(){
+  const now=new Date();
+  const prog=String(Math.floor(Math.random()*900)+100); // progressivo LOCALE (demo)
+  testata.numero=`OFF-${now.getFullYear()}-${prog}`;
+  testata.data=now.toLocaleDateString('it-IT');
+  document.getElementById('offNum').value=testata.numero;
+  document.getElementById('offData').value=testata.data;
+}
+function renderTestata(){
+  const slug=document.getElementById('offCliente').value;
+  const nuovo=document.getElementById('nuovoClienteBox');
+  const anagBox=document.getElementById('anagBox');
+  const titolo=document.getElementById('testataTitolo');
+  if(slug==='NUOVO'){
+    nuovo.style.display='block';
+    const nome=document.getElementById('ncNome').value||'nuovo cliente';
+    anagBox.innerHTML=`<div class="regola" style="opacity:1;border:2px solid var(--amber);background:var(--amber-soft)"><div class="r-tag" style="color:#9A6A1A">CLIENTE PROVVISORIO — NON IN OIP</div><div class="r-body" style="font-size:12.5px">I dati inseriti sono locali e temporanei. Vanno anagrafati in OIP prima dell'ordine.</div></div>`;
+    titolo.textContent=`${testata.numero} · ${nome}`;
+  } else {
+    nuovo.style.display='none';
+    const a=getAnagrafica(slug);
+    if(a){
+      anagBox.innerHTML=`<div class="regola" style="opacity:1;border:1px solid var(--petrol)"><div class="r-tag" style="color:var(--petrol)">ANAGRAFICA — LETTA DA ${a.fonte}</div><div class="r-body" style="font-size:12.5px;line-height:1.7"><b>${a.ragioneSociale}</b><br>P.IVA ${a.piva} · ${a.indirizzo}<br>Rif. ${a.referente} · ${a.email}</div></div>`;
+      titolo.textContent=`${testata.numero} · ${a.ragioneSociale}`;
+    }
+  }
+  // allinea il selettore cliente della sezione commessa (che guida storico/prezzi)
+  const cliSel=document.getElementById('cliente');
+  if(cliSel && cliSel.value!==slug){ cliSel.value=slug; }
+}
+document.getElementById('offCliente').addEventListener('change',()=>{
+  const slug=document.getElementById('offCliente').value;
+  document.getElementById('cliente').value=slug;   // sincronizza
+  renderTestata(); refresh();
+});
+document.getElementById('ncNome').addEventListener('input',renderTestata);
+// se cambia il cliente nella sezione commessa, allinea la testata
+document.getElementById('cliente').addEventListener('change',()=>{
+  const slug=document.getElementById('cliente').value;
+  const offSel=document.getElementById('offCliente');
+  if(offSel.value!==slug){ offSel.value=slug; renderTestata(); }
+});
+
+/* ═══════════ GENERA OFFERTA PDF (jsPDF, dati reali) ═══════════ */
+function prezzoFinale(k){
+  const cli=CLIENTI[cfg.cliente];
+  const listino=k.costoPz*(1+cli.margine)*(1-k.scaglia);
+  const sims=cli.storico.map(o=>({...o,sim:similitudine(o,k)})).sort((a,b)=>b.sim-a.sim);
+  const best=sims[0];
+  let anchored=null;
+  if(best&&best.sim>=60){ const volR=Math.pow(k.volTot/best.vol,0.85), dLav=(k.lav.length-1)-best.nLav; anchored=(best.prezzo*volR+dLav*0.35)*(1-k.scaglia*0.5); }
+  const hasAQ=cli.accordo&&cli.accordo.shapeFam===cfg.shape;
+  let finale = hasAQ?listino*(1-cli.accordo.sconto):(anchored!==null?anchored:listino);
+  if(finale<k.costoPz*1.05) finale=k.costoPz*1.05;
+  return finale;
+}
+function polyPath(doc,pts,style){
+  // disegna un poligono chiuso da punti assoluti [[x,y]...] — robusto su mobile
+  const rel=[]; for(let i=1;i<pts.length;i++) rel.push([pts[i][0]-pts[i-1][0],pts[i][1]-pts[i-1][1]]);
+  rel.push([pts[0][0]-pts[pts.length-1][0],pts[0][1]-pts[pts.length-1][1]]);
+  doc.lines(rel,pts[0][0],pts[0][1],[1,1],style,true);
+}
+function generaPDF(){
+  const note=document.getElementById('pdfNote');
+  if(typeof window.jspdf==='undefined'){ note.textContent='✗ Libreria PDF non caricata: serve connessione a Internet (la libreria si scarica online). Riprova con rete attiva.'; return; }
+  try{
+  const {jsPDF}=window.jspdf;
+  const doc=new jsPDF({unit:'mm',format:'a4'});
+  const W=210,H=297;
+  const INK='#1C2430',PETROL='#0E6B66',PETSOFT='#E2EFEE',AMBER='#E8A33D',GREY='#6B7680',LINE='#D8DCD6',PAPER='#F4F5F2';
+  const k=calc(), Htot=cfg.strati.reduce((a,s)=>a+s.h,0);
+  const a=getAnagrafica(document.getElementById('offCliente').value);
+  const cliNome=a?a.ragioneSociale:(document.getElementById('ncNome').value||'Cliente');
+  const prezzo=prezzoFinale(k), tot=prezzo*cfg.qty;
+  const rr=k.regole;
+
+  // header band
+  doc.setFillColor(INK); doc.rect(0,0,W,42,'F');
+  // esagono logo
+  doc.setFillColor(PETROL);
+  const hx=26,hy=21,hr=7,pt=[];
+  for(let i=0;i<6;i++){ const ang=Math.PI/180*(60*i-90); pt.push([hx+hr*Math.cos(ang),hy+hr*Math.sin(ang)]); }
+  polyPath(doc,pt,'F');
+  doc.setTextColor('#fff'); doc.setFont('helvetica','bold'); doc.setFontSize(8); doc.text('EX',hx,hy+1,{align:'center'});
+  doc.setFontSize(22); doc.text('EXPAN',40,17);
+  doc.setFont('helvetica','normal'); doc.setFontSize(8.5); doc.setTextColor('#9AA7B0');
+  doc.text('DT GROUP S.r.l.  ·  soluzioni in schiuma espansa',40,24);
+  doc.setTextColor(AMBER); doc.setFont('helvetica','bold'); doc.setFontSize(9); doc.text('OFFERTA',W-20,15,{align:'right'});
+  doc.setTextColor('#fff'); doc.setFontSize(15); doc.text(testata.numero||'OFF-2026-000',W-20,22,{align:'right'});
+  doc.setTextColor('#9AA7B0'); doc.setFont('helvetica','normal'); doc.setFontSize(9); doc.text(testata.data||'',W-20,27,{align:'right'});
+
+  // blocchi cliente / riferimenti
+  const yb=54, bw=(W-40)/2-3;
+  doc.setDrawColor(LINE); doc.setFillColor('#ffffff'); doc.roundedRect(20,yb,bw,26,2,2,'FD');
+  doc.setFillColor(PETSOFT); doc.setDrawColor(PETROL); doc.roundedRect(20+bw+6,yb,bw,26,2,2,'FD');
+  doc.setTextColor(PETROL); doc.setFont('helvetica','bold'); doc.setFontSize(7.5); doc.text('SPETT.LE',25,yb+6);
+  doc.setTextColor(INK); doc.setFontSize(12); doc.text(cliNome,25,yb+12);
+  doc.setFont('helvetica','normal'); doc.setFontSize(8.5); doc.setTextColor(GREY);
+  if(a){ doc.text('P.IVA '+a.piva,25,yb+17); doc.text(a.indirizzo,25,yb+21.5); }
+  else { doc.text('Cliente provvisorio — da anagrafare in OIP',25,yb+17); }
+  const xr=20+bw+11;
+  doc.setTextColor(PETROL); doc.setFont('helvetica','bold'); doc.setFontSize(7.5); doc.text('RIFERIMENTI',xr,yb+6);
+  doc.setTextColor(INK); doc.setFont('helvetica','normal'); doc.setFontSize(8.5);
+  doc.text('Rif. cliente:  '+(a?a.referente:'—'),xr,yb+12);
+  doc.text('Validita offerta:  30 giorni',xr,yb+17);
+  doc.text('Consegna:  4-5 settimane',xr,yb+21.5);
+
+  // titolo prodotto
+  const yt=90;
+  const titolo=`${cfg.shape==='POLY'?'Pannello '+cfg.poly.n+' lati':cfg.shape==='ELL'?'Elemento ellittico':cfg.shape==='RETT'?'Lastra':'Sagoma'} — ${cfg.strati.map(s=>s.mat).join(' / ')}`;
+  doc.setTextColor(INK); doc.setFont('helvetica','bold'); doc.setFontSize(13); doc.text(titolo,20,yt);
+  doc.setDrawColor(AMBER); doc.setLineWidth(0.8); doc.line(20,yt+3,38,yt+3); doc.setLineWidth(0.2);
+
+  // disegno quotato (profilo reale)
+  const dy=98, dw=(W-40)/2-4, dh=84;
+  doc.setFillColor('#FCFCFA'); doc.setDrawColor(LINE); doc.roundedRect(20,dy,dw,dh,2,2,'FD');
+  doc.setTextColor(PETROL); doc.setFont('helvetica','bold'); doc.setFontSize(7.5); doc.text('DISEGNO QUOTATO',25,dy+6);
+  // profilo dai punti reali
+  const out=k.g.out, bb=k.g.bb, pw=bb.maxx-bb.minx, ph=bb.maxy-bb.miny;
+  const sc=Math.min((dw-24)/Math.max(pw,ph),(dh-30)/Math.max(pw,ph));
+  const ox=20+dw/2, oy=dy+dh/2-3;
+  const tx=x=>ox+(x-(bb.minx+pw/2))*sc, ty=y=>oy-(y-(bb.miny+ph/2))*sc;
+  doc.setDrawColor(INK); doc.setFillColor('#F0F5F4'); doc.setLineWidth(0.5);
+  const poly=out.map(p=>[tx(p.x),ty(p.y)]);
+  polyPath(doc,poly,'FD');
+  // fori
+  doc.setDrawColor(PETROL); doc.setFillColor('#ffffff');
+  cfg.fori.forEach(f=>{ doc.circle(tx(f.cx),ty(f.cy),f.d/2*sc,'FD'); });
+  // quota larghezza
+  doc.setDrawColor(GREY); doc.setLineWidth(0.2);
+  doc.line(tx(bb.minx),oy+ph/2*sc+6,tx(bb.maxx),oy+ph/2*sc+6);
+  doc.setTextColor(INK); doc.setFont('helvetica','bold'); doc.setFontSize(8);
+  doc.text(Math.round(pw)+' cm',ox,oy+ph/2*sc+11,{align:'center'});
+  doc.setTextColor(GREY); doc.setFont('helvetica','normal'); doc.setFontSize(7.5);
+  doc.text(`ingombro ${Math.round(pw)}×${Math.round(ph)} · H ${Htot} cm`,ox,dy+dh-4,{align:'center'});
+
+  // specifiche
+  const sx=20+dw+8, sw=(W-40)/2-4;
+  doc.setFillColor('#ffffff'); doc.setDrawColor(LINE); doc.roundedRect(sx,dy,sw,dh,2,2,'FD');
+  doc.setTextColor(PETROL); doc.setFont('helvetica','bold'); doc.setFontSize(7.5); doc.text('SPECIFICHE TECNICHE',sx+5,dy+6);
+  const specs=[['Forma',cfg.shape+(cfg.shape==='POLY'?' · '+cfg.poly.n+' lati Ø'+cfg.poly.d:'')],['Stratigrafia',cfg.strati.length+' strato/i']];
+  cfg.strati.forEach((s,i)=>specs.push(['  · '+(i===0?'sup.':'strato '+(i+1)),M()[s.mat].nome+' · '+s.h+' cm']));
+  specs.push(['Fori',cfg.fori.length?cfg.fori.length+' passanti':'nessuno']);
+  if(rr && rr.macchina!=='A (base)') specs.push(['Macchina',rr.macchina]);
+  specs.push(['Quantita',cfg.qty+' pezzi']);
+  let sy=dy+13;
+  doc.setFontSize(8.5);
+  specs.forEach(([kk,vv])=>{
+    const bold=!kk.startsWith('  ');
+    doc.setTextColor(bold?INK:GREY); doc.setFont('helvetica',bold?'bold':'normal'); doc.text(kk,sx+5,sy);
+    doc.setTextColor(INK); doc.setFont('helvetica','normal'); doc.text(String(vv),sx+sw-5,sy,{align:'right'});
+    doc.setDrawColor(LINE); doc.line(sx+5,sy+2.5,sx+sw-5,sy+2.5);
+    sy+=8.2;
+  });
+
+  // fascia prezzo
+  const py=dy+dh+6;
+  doc.setFillColor(INK); doc.roundedRect(20,py,W-40,18,2,2,'F');
+  doc.setTextColor('#9AA7B0'); doc.setFont('helvetica','normal'); doc.setFontSize(8); doc.text('PREZZO UNITARIO',25,py+7);
+  doc.setTextColor('#ffffff'); doc.setFont('helvetica','bold'); doc.setFontSize(16); doc.text(fmt(prezzo)+' €/pz',25,py+14);
+  doc.setTextColor('#9AA7B0'); doc.setFont('helvetica','normal'); doc.setFontSize(8); doc.text('TOTALE ('+cfg.qty+' pz)',W-25,py+7,{align:'right'});
+  doc.setTextColor('#C9E4E1'); doc.setFont('helvetica','bold'); doc.setFontSize(18); doc.text(fmt(tot)+' €',W-25,py+14,{align:'right'});
+
+  // condizioni
+  doc.setTextColor(GREY); doc.setFont('helvetica','normal'); doc.setFontSize(7.5);
+  doc.text('Condizioni:  prezzi IVA esclusa · pagamento 60 gg df · resa franco ns. stabilimento · offerta valida 30 giorni.',20,py+26);
+
+  // footer
+  doc.setFillColor(PAPER); doc.rect(0,H-14,W,14,'F');
+  doc.setDrawColor(LINE); doc.line(20,H-14,W-20,H-14);
+  doc.setTextColor(GREY); doc.setFontSize(7);
+  doc.text('DT Group S.r.l. · Via A. Einstein 5/7, Santa Maria di Sala (VE) · www.expan.it',20,H-8);
+  doc.setTextColor('#9AA7B0'); doc.setFontSize(6.5);
+  doc.text('Documento generato dal configuratore · prezzi determinati dal sistema',20,H-4);
+  doc.setTextColor(GREY); doc.setFontSize(7); doc.text('pag. 1/1',W-20,H-6,{align:'right'});
+
+  const nomeFile=(testata.numero||'offerta')+'_'+cliNome.replace(/[^a-zA-Z0-9]/g,'')+'.pdf';
+  // su mobile doc.save() spesso non scarica: apro il PDF in una nuova scheda (fallback download)
+  try{
+    const blob=doc.output('blob');
+    const url=URL.createObjectURL(blob);
+    const w=window.open(url,'_blank');
+    if(!w){ // popup bloccato → forzo download via link
+      const a=document.createElement('a'); a.href=url; a.download=nomeFile; document.body.appendChild(a); a.click(); a.remove();
+    }
+    note.textContent='✓ Offerta generata. Se non si apre, controlla i blocchi popup o la cartella Download.';
+  }catch(e2){
+    doc.save(nomeFile);
+    note.textContent='✓ Offerta generata (download).';
+  }
+  }catch(err){
+    note.textContent='✗ Errore nella generazione: '+err.message;
+    console.error('generaPDF',err);
+  }
+}
+document.getElementById('btnPDF').onclick=generaPDF;
+
+/* init */
+cliente.value=cfg.cliente;
+initTestata(); renderTestata();
+sizeViewer(); renderStrati(); renderFori(); drawPolyEditor(); renderRegole(); refresh();
+setTimeout(()=>{sizeViewer();render3D();},100);
+</script>
+</body>
+</html>
