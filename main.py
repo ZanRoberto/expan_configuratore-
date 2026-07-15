@@ -230,7 +230,7 @@ Rispondi SOLO con JSON valido, nessun testo, nessun markdown. Schema ESATTO:
 {
  "nome": "nome del prodotto",
  "motore": "strati|profilo|assieme3d|dxf",
- "campi": [{"id":"slug_senza_spazi","label":"Etichetta","tipo":"testo|num|scelta","opz":["a","b"],"std":["1800","2000","2200"]}],
+ "campi": [{"id":"slug_senza_spazi","label":"Etichetta","tipo":"testo|num|scelta","opz":["a","b"],"std":["1800","2000","2200"],"min":1600,"max":2400}],
  "regoleText": ["se X allora maggiora del N%", "se Y allora avviso ..."],
  "normativa": ["riferimento normativo puntuale e pertinente al soggetto"],
  "distinta": [{"cod":"COD","nome":"Voce di distinta","um":"pz|kg|set|m"}]
@@ -243,8 +243,13 @@ MISURE — OBBLIGATORIO: ogni campo "tipo":"num" DEVE avere "std": le misure STA
 del settore per quel campo (3-6 valori, dal piu' comune in poi, solo numeri come stringhe).
 Il PRIMO valore di "std" e' quello con cui il prodotto nasce: dev'essere una misura VALIDA
 e conforme alle regole che dichiari (mai 0, mai un valore che le tue stesse regole vietano).
-Esempi: lunghezza materasso std ["190","200","210"]; larghezza ["80","90","120","160","180"];
-lunghezza vano ambulanza std ["2500","2800","3000","3300"].
+Esempi: lunghezza materasso std ["190","200","210"] min 180 max 220; larghezza ["80","90","120","160","180"] min 60 max 200;
+lunghezza vano ambulanza std ["2500","2800","3000","3300"] min 2200 max 3600.
+
+CONTROLLO — OBBLIGATORIO: ogni campo "tipo":"num" DEVE avere anche "min" e "max": i limiti
+REALI entro cui una misura fuori standard e' ancora producibile. Servono a impedire che
+l'operatore inserisca misure impossibili (es. una lunghezza di 999 su un materasso).
+"min" e "max" sono numeri, coerenti col settore e con gli std dichiarati.
 Le regole dichiarative usano il formato: "se CAMPO = 'VALORE' allora CAMPO2 deve essere 'VALORE2'"
 (cosi' il configuratore le fa rispettare da solo)."""
 
