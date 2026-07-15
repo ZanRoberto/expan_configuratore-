@@ -230,14 +230,23 @@ Rispondi SOLO con JSON valido, nessun testo, nessun markdown. Schema ESATTO:
 {
  "nome": "nome del prodotto",
  "motore": "strati|profilo|assieme3d|dxf",
- "campi": [{"id":"slug_senza_spazi","label":"Etichetta","tipo":"testo|num|scelta","opz":["a","b"]}],
+ "campi": [{"id":"slug_senza_spazi","label":"Etichetta","tipo":"testo|num|scelta","opz":["a","b"],"std":["1800","2000","2200"]}],
  "regoleText": ["se X allora maggiora del N%", "se Y allora avviso ..."],
  "normativa": ["riferimento normativo puntuale e pertinente al soggetto"],
  "distinta": [{"cod":"COD","nome":"Voce di distinta","um":"pz|kg|set|m"}]
 }
 Regole: 'motore'='dxf' se c'e' un CAD; campi concreti e specifici del soggetto (non generici);
 regoleText dichiarative e leggibili; normativa REALE e pertinente (mai inventata generica se
-il soggetto ha norme note); 4-12 campi. Niente campi 'opz' se tipo!='scelta'."""
+il soggetto ha norme note); 4-12 campi. Niente campi 'opz' se tipo!='scelta'.
+
+MISURE — OBBLIGATORIO: ogni campo "tipo":"num" DEVE avere "std": le misure STANDARD reali
+del settore per quel campo (3-6 valori, dal piu' comune in poi, solo numeri come stringhe).
+Il PRIMO valore di "std" e' quello con cui il prodotto nasce: dev'essere una misura VALIDA
+e conforme alle regole che dichiari (mai 0, mai un valore che le tue stesse regole vietano).
+Esempi: lunghezza materasso std ["190","200","210"]; larghezza ["80","90","120","160","180"];
+lunghezza vano ambulanza std ["2500","2800","3000","3300"].
+Le regole dichiarative usano il formato: "se CAMPO = 'VALORE' allora CAMPO2 deve essere 'VALORE2'"
+(cosi' il configuratore le fa rispettare da solo)."""
 
 @app.post("/api/ai/ask")
 async def ai_ask(request: Request):
