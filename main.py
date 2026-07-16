@@ -17,7 +17,7 @@ invece già stato testato a parte con 50 richieste concorrenti: zero collisioni.
 """
 import os, sqlite3, datetime, json
 import urllib.request, urllib.error
-from fastapi import FastAPI, HTTPException, Header, Request
+from fastapi import FastAPI, HTTPException, Header, Request, Body
 from fastapi.responses import JSONResponse, HTMLResponse, FileResponse
 from fastapi.staticfiles import StaticFiles
 from contextlib import asynccontextmanager
@@ -50,6 +50,13 @@ def init_db():
     con.executescript("""
     CREATE TABLE IF NOT EXISTS contatori(
         chiave TEXT PRIMARY KEY, anno INTEGER NOT NULL, valore INTEGER NOT NULL);
+    CREATE TABLE IF NOT EXISTS anagrafica(
+      azienda_id TEXT NOT NULL DEFAULT 'default',
+      tipo       TEXT NOT NULL,            -- fornitori | costi | listini | ...
+      dati_json  TEXT NOT NULL,
+      aggiornato TEXT NOT NULL,
+      PRIMARY KEY(azienda_id, tipo)
+    );
     CREATE TABLE IF NOT EXISTS offerte(
         numero TEXT PRIMARY KEY,
         data TEXT NOT NULL,
@@ -139,6 +146,36 @@ def leggi_offerta(numero: str):
     congelato = (row[3] == "passata")
     return {"numero": row[0], "data": row[1], "cliente_cod": row[2], "stato": row[3],
             "creata_da": row[4], "congelato": congelato, "payload": payload}
+
+@app.get("/api/anagrafica")
+def leggi_anagrafica(azienda: str = "default"):
+    """Le tabelle dell'azienda (fornitori, costi, listini...). Nessun dato e' nel motore:
+    se l'azienda non ha ancora caricato niente, torna vuoto."""
+    con = get_con()
+    rows = con.execute("SELECT tipo,dati_json FROM anagrafica WHERE azienda_id=?;", (azienda,)).fetchall()
+    con.close()
+    return {t: json.loads(d) for (t, d) in rows}
+
+@app.post("/api/anagrafica/{tipo}")
+def scrivi_anagrafica(tipo: str, body: dict = Body(...)):
+    """Sostituisce una tabella dell'azienda (import dagli Excel del cliente)."""
+    azienda = body.get("azienda") or "default"
+    righe = body.get("righe")
+    if not isinstance(righe, list):
+        raise HTTPException(400, "serve 'righe': [...]")
+    con = get_con()
+    con.execute("""INSERT INTO anagrafica(azienda_id,tipo,dati_json,aggiornato) VALUES(?,?,?,?)
+                   ON CONFLICT(azienda_id,tipo) DO UPDATE SET dati_json=excluded.dati_json, aggiornato=excluded.aggiornato;""",
+                (azienda, tipo, json.dumps(righe, ensure_ascii=False), datetime.now().isoformat(timespec="seconds")))
+    con.commit(); con.close()
+    return {"tipo": tipo, "azienda": azienda, "righe": len(righe)}
+
+@app.delete("/api/anagrafica/{tipo}")
+def cancella_anagrafica(tipo: str, azienda: str = "default"):
+    con = get_con()
+    con.execute("DELETE FROM anagrafica WHERE azienda_id=? AND tipo=?;", (azienda, tipo))
+    con.commit(); con.close()
+    return {"tipo": tipo, "azienda": azienda, "cancellata": True}
 
 @app.get("/api/export")
 def export_erp(stato: str = "confermata", x_api_key: str = Header(None)):
