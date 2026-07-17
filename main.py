@@ -266,12 +266,42 @@ sanitarie/neonatali obbligatorie, omologazione veicolo; per altri soggetti: le l
 Rispondi SOLO con JSON valido, nessun testo, nessun markdown. Schema ESATTO:
 {
  "nome": "nome del prodotto",
- "motore": "strati|profilo|assieme3d|dxf",
+ "motore": "strati|serie|forma|dxf|glb",
  "campi": [{"id":"slug_senza_spazi","label":"Etichetta","tipo":"testo|num|scelta","opz":["a","b"],"std":["1800","2000","2200"],"min":1600,"max":2400}],
  "regoleText": ["se X allora maggiora del N%", "se Y allora avviso ..."],
  "normativa": ["riferimento normativo puntuale e pertinente al soggetto"],
  "distinta": [{"cod":"COD","nome":"Voce di distinta","um":"pz|kg|set|m"}]
 }
+LA CASSETTA DEI DISEGNATORI — scegli "motore" guardando COM'E' FATTO il soggetto.
+Questa e' la decisione piu' importante: il configuratore disegna solo cio' che sa fare.
+
+"strati" — il prodotto e' FATTO DI LASTRE SOVRAPPOSTE e incollate.
+    (materasso, pressato, pannello sandwich, cartone ondulato liner+onda+liner)
+    campi tipici: lunghezza, larghezza, spessore_totale.
+    Se il profilo fra una lastra e l'altra e' ondulato aggiungi il campo "onde"
+    (numero di onde, std ["5","3","7"]) — le onde sono INTERNE: sopra e sotto e' piatto.
+
+"serie" — il prodotto e' N PEZZI UGUALI RIPETUTI CON UNA LEGGE.
+    (scala a chiocciola: ogni gradino sale e ruota · portone sezionale: ogni pannello sale ·
+     doghe, gradonate, ringhiere: il pezzo si ripete)
+    campi OBBLIGATORI, con questi id esatti:
+      altezza (totale, mm) · alzata (passo fra un pezzo e il successivo, mm) ·
+      rotazione (gradi TOTALI del giro: 360 = un giro intero, 0 = pila diritta senza rotazione) ·
+      raggio_interno (palo centrale, 0 se non c'e') · raggio_esterno · spessore (pedata/pannello)
+    il numero dei pezzi NON si dichiara: nasce da altezza / alzata.
+
+"forma" — il prodotto e' UN PROFILO PIANO TIRATO IN SPESSORE.
+    (scatola, fustella, pannello sagomato, piastra, guarnizione, coperchio)
+    campi OBBLIGATORI, con questi id esatti:
+      forma (scelta: "Rettangolo"|"Poligono N lati"|"Ellisse") · lunghezza · larghezza ·
+      raggio (arrotondamento degli angoli, 0 = spigoli vivi) · lati (se poligono) · diametro (se poligono)
+
+"dxf" — SOLO se il cliente ha allegato un disegno CAD.
+"glb" — SOLO se il cliente ha allegato un modello 3D.
+
+Se il soggetto non entra in nessuna famiglia, scegli la piu' vicina e scrivi una regola
+che dichiara cosa il disegno NON rappresenta. Non inventare motori che non esistono.
+
 Regole: 'motore'='dxf' se c'e' un CAD; campi concreti e specifici del soggetto (non generici);
 regoleText dichiarative e leggibili; normativa REALE e pertinente (mai inventata generica se
 il soggetto ha norme note); 4-12 campi. Niente campi 'opz' se tipo!='scelta'.
