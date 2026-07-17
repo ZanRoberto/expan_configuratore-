@@ -270,7 +270,7 @@ Rispondi SOLO con JSON valido, nessun testo, nessun markdown. Schema ESATTO:
  "campi": [{"id":"slug_senza_spazi","label":"Etichetta","tipo":"testo|num|scelta","opz":["a","b"],"std":["1800","2000","2200"],"min":1600,"max":2400}],
  "regoleText": ["se X allora maggiora del N%", "se Y allora avviso ..."],
  "normativa": ["riferimento normativo puntuale e pertinente al soggetto"],
- "distinta": [{"cod":"COD","nome":"Voce di distinta","um":"pz|kg|set|m"}]
+ "distinta": [{"cod":"COD-${VAR(campo)}","nome":"Voce ${campo}","um":"pz|kg|set|m"}]
 }
 LA CASSETTA DEI DISEGNATORI — scegli "motore" guardando COM'E' FATTO il soggetto.
 Questa e' la decisione piu' importante: il configuratore disegna solo cio' che sa fare.
@@ -317,6 +317,25 @@ CONTROLLO — OBBLIGATORIO: ogni campo "tipo":"num" DEVE avere anche "min" e "ma
 REALI entro cui una misura fuori standard e' ancora producibile. Servono a impedire che
 l'operatore inserisca misure impossibili (es. una lunghezza di 999 su un materasso).
 "min" e "max" sono numeri, coerenti col settore e con gli std dichiarati.
+DISTINTA — LE VARIANTI NEL CODICE: una voce che CAMBIA con una scelta del cliente deve
+portarsela nel codice e nella descrizione, cosi' il gestionale riceve l'articolo giusto.
+Si scrive col nome del campo fra ${...}:
+  {"cod":"GRAD-001-${VAR(colore)}", "nome":"Gradino ${materiale_pedata} ${colore}", "um":"pz"}
+  → con colore=rosso e materiale_pedata=rovere diventa:  GRAD-001-ROSSO · "Gradino rovere rosso"
+VAR(campo) = la SIGLA del valore: serve per il CODICE.
+
+LE SIGLE — il gestionale vuole codici suoi, non i nomi per esteso: GRA#ROS23ROV, non
+GRA#ROSSO23ROVERE. Quindi ogni valore di una scelta che entra nel codice deve avere la
+sua SIGLA, dichiarata cosi' nel campo:
+  {"id":"colore","label":"Colore","tipo":"scelta","opz":["rosso","nero","bianco"],
+   "cod":{"rosso":"ROS","nero":"NER","bianco":"BIA"}}
+  {"id":"materiale","tipo":"scelta","opz":["rovere","faggio"],"cod":{"rovere":"ROV","faggio":"FAG"}}
+Le sigle sono di 2-3 lettere, maiuscole, come si usa nei gestionali.
+Mettile SOLO sui campi che entrano nel codice articolo (colore, materiale, finitura, misura
+codificata): non su tutti.
+${campo} da solo = il valore com'e': serve per la DESCRIZIONE.
+Mettile SOLO sulle voci che cambiano davvero: il gradino cambia col colore, la bulloneria no.
+
 Le regole dichiarative usano il formato: "se CAMPO = 'VALORE' allora CAMPO2 deve essere 'VALORE2'"
 (cosi' il configuratore le fa rispettare da solo)."""
 
