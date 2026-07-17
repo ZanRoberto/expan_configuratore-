@@ -267,11 +267,28 @@ Rispondi SOLO con JSON valido, nessun testo, nessun markdown. Schema ESATTO:
 {
  "nome": "nome del prodotto",
  "motore": "strati|serie|forma|dxf|glb",
- "campi": [{"id":"slug_senza_spazi","label":"Etichetta","tipo":"testo|num|scelta","opz":["a","b"],"std":["1800","2000","2200"],"min":1600,"max":2400}],
+ "campi": [{"id":"slug","ruolo":"altezza|passo|numero|rotazione|raggio_interno|raggio_esterno|lunghezza|larghezza|diametro|spessore|onde|colore|materiale|finitura|corrimano|null","label":"Etichetta","tipo":"testo|num|scelta","opz":["a","b"],"std":["1800","2000"],"min":1600,"max":2400,"cod":{"a":"AAA"}}],
  "regoleText": ["se X allora maggiora del N%", "se Y allora avviso ..."],
  "normativa": ["riferimento normativo puntuale e pertinente al soggetto"],
  "distinta": [{"cod":"COD-${VAR(campo)}","nome":"Voce ${campo}","um":"pz|kg|set|m"}]
 }
+IL RUOLO — LA COSA PIU' IMPORTANTE DI TUTTE.
+Ogni campo che serve al DISEGNO deve dichiarare il suo "ruolo". Il motore legge il RUOLO,
+non il nome: puoi chiamare un campo "alzata", "passo", "altezza_pannello" o "interasse" —
+se il ruolo e' "passo", il motore lo capisce. Senza ruolo, il prodotto esce sbagliato.
+
+I ruoli:
+  "altezza"        l'altezza/lunghezza totale del prodotto
+  "passo"          il dislivello o l'interasse fra un pezzo e il successivo (alzata, altezza pannello)
+  "numero"         il numero di pezzi, se lo si dichiara invece di calcolarlo
+  "rotazione"      i gradi TOTALI del giro (0 = pila diritta)
+  "raggio_interno" il palo/mozzo centrale (0 se non c'e')
+  "raggio_esterno" il raggio esterno del pezzo · o il raggio degli angoli in "forma"
+  "lunghezza" "larghezza" "diametro" "spessore"     le misure del pezzo
+  "onde"           il numero di onde interne
+  "colore" "materiale" "finitura" "corrimano"       le scelte
+Un campo che non serve al disegno (es. "tipo_scorrimento", "imballo") NON mette il ruolo.
+
 LA CASSETTA DEI DISEGNATORI — scegli "motore" guardando COM'E' FATTO il soggetto.
 Questa e' la decisione piu' importante: il configuratore disegna solo cio' che sa fare.
 
