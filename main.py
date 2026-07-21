@@ -15,9 +15,9 @@ NOTA ONESTA: questo file non è stato eseguito nell'ambiente di sviluppo
 primo deploy su Render, leggendo i log. Il CUORE (numerazione atomica) è
 invece già stato testato a parte con 50 richieste concorrenti: zero collisioni.
 """
-import os, sqlite3, datetime, json
+import os, sqlite3, datetime, json, base64, hmac
 import urllib.request, urllib.error
-from fastapi import FastAPI, HTTPException, Header, Request, Body
+from fastapi import FastAPI, HTTPException, Header, Request, Body, Response
 from fastapi.responses import JSONResponse, HTMLResponse, FileResponse
 from fastapi.staticfiles import StaticFiles
 from contextlib import asynccontextmanager
@@ -32,6 +32,31 @@ async def lifespan(app):
     yield
 
 app = FastAPI(title="EXPAN Configuratore", version="1.0", lifespan=lifespan)
+
+# ══════════════════ PORTA A CHIAVE (Basic Auth su TUTTO il sito) ══════════════════
+# Protezione temporanea, solo per te: nessuno vede nemmeno l'HTML senza credenziali.
+# Si ATTIVA solo se imposti SITE_PASSWORD su Render (Environment). Senza, il sito resta
+# com'era (così un deploy non ti chiude fuori). Utente/password NON sono nel codice: env.
+SITE_USER     = os.environ.get("SITE_USER", "roberto")
+SITE_PASSWORD = os.environ.get("SITE_PASSWORD", "")   # ← imposta questa su Render per accendere la protezione
+
+@app.middleware("http")
+async def porta_a_chiave(request: Request, call_next):
+    if not SITE_PASSWORD:                      # protezione spenta finché non imposti la password
+        return await call_next(request)
+    if request.url.path == "/api/health":      # il monitoraggio di Render resta aperto
+        return await call_next(request)
+    auth = request.headers.get("Authorization", "")
+    ok = False
+    if auth.startswith("Basic "):
+        try:
+            u, _, p = base64.b64decode(auth[6:]).decode("utf-8", "ignore").partition(":")
+            ok = hmac.compare_digest(u, SITE_USER) and hmac.compare_digest(p, SITE_PASSWORD)
+        except Exception:
+            ok = False
+    if not ok:
+        return Response(status_code=401, headers={"WWW-Authenticate": 'Basic realm="EXPAN"'})
+    return await call_next(request)
 
 # ══════════════════ DB ══════════════════
 def get_con():
