@@ -44,7 +44,7 @@ SITE_PASSWORD = os.environ.get("SITE_PASSWORD", "")   # ← imposta questa su Re
 async def porta_a_chiave(request: Request, call_next):
     if not SITE_PASSWORD:                      # protezione spenta finché non imposti la password
         return await call_next(request)
-    if request.url.path == "/api/health":      # il monitoraggio di Render resta aperto
+    if request.url.path.startswith("/api/"):   # le chiamate dati restano libere: la password protegge la PAGINA (il codice sorgente, servito su "/"), non gli endpoint di salvataggio. Isolamento vero dei dati → arriverà col login per-partner.
         return await call_next(request)
     auth = request.headers.get("Authorization", "")
     ok = False
