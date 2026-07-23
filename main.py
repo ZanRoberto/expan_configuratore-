@@ -191,7 +191,7 @@ def scrivi_anagrafica(tipo: str, body: dict = Body(...)):
     con = get_con()
     con.execute("""INSERT INTO anagrafica(azienda_id,tipo,dati_json,aggiornato) VALUES(?,?,?,?)
                    ON CONFLICT(azienda_id,tipo) DO UPDATE SET dati_json=excluded.dati_json, aggiornato=excluded.aggiornato;""",
-                (azienda, tipo, json.dumps(righe, ensure_ascii=False), datetime.datetime.now().isoformat(timespec="seconds")))
+                (azienda, tipo, json.dumps(righe, ensure_ascii=False), datetime.now().isoformat(timespec="seconds")))
     con.commit(); con.close()
     return {"tipo": tipo, "azienda": azienda, "righe": len(righe)}
 
