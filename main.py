@@ -110,6 +110,45 @@ def init_db():
     """)
     con.commit(); con.close()
 
+# ══════════════════ FIRMA CALCOLATA DAL SERVER ══════════════════
+# La firma NON si prende più dal browser. Il browser manda il testo della
+# configurazione (lib::scelta|scelta|...), il server lo normalizza e ne calcola
+# l'hash. Una sola implementazione = firme che non possono divergere.
+import hashlib as _hl, unicodedata as _ud
+
+def _norm_scelta(v):
+    """'RAL 7016' == 'ral7016'; 'mm 800' == '800'; accenti e spazi ininfluenti."""
+    s = _ud.normalize("NFKD", str(v or "").strip())
+    s = "".join(c for c in s if not _ud.combining(c))
+    t = s.lower().replace(",", ".")
+    for u in ("mm", "cm", "kg", "mq", "m2", "pz"):
+        t = t.replace(u, "")
+    t = t.strip()
+    try:
+        f = float(t)
+        return str(int(f)) if f.is_integer() else ("%.6f" % f).rstrip("0").rstrip(".")
+    except ValueError:
+        pass
+    tok = s.upper().split()
+    if len(tok) == 2 and tok[0].isalpha() and len(tok[0]) <= 5 and tok[1].isdigit():
+        return tok[0] + tok[1]
+    return " ".join(tok)
+
+def firma_da_testo(testo):
+    """testo = 'LIB::campo=valore|campo=valore'. Ritorna (hash, lib, scelte)."""
+    testo = testo or ""
+    lib, _, resto = testo.partition("::")
+    lib = _norm_scelta(lib)
+    scelte = []
+    for pezzo in (resto.split("|") if resto else []):
+        if not pezzo.strip():
+            continue
+        k, sep, v = pezzo.partition("=")
+        scelte.append(_norm_scelta(k) + "=" + _norm_scelta(v) if sep else _norm_scelta(pezzo))
+    scelte = sorted(set(scelte))          # l'ordine dei campi non conta
+    canonico = lib + "::" + "|".join(scelte)
+    return _hl.sha256(canonico.encode("utf-8")).hexdigest()[:16], lib, scelte
+
 # ══════════════════ NUMERAZIONE ATOMICA (cuore già testato) ══════════════════
 def assegna_numero(con, cliente_cod, creata_da, payload):
     anno = datetime.datetime.now().year
@@ -132,12 +171,17 @@ def assegna_numero(con, cliente_cod, creata_da, payload):
     if payload:
         for riga in (payload.get("righe") or []):
             f = (riga.get("firma") or {})
-            h = f.get("hash")
-            if not h:
-                continue
             testo = f.get("testo") or ""
-            lib_r, _, resto = testo.partition("::")
-            scelte = resto.split("|") if resto else []
+            if testo:
+                h, lib_r, scelte = firma_da_testo(testo)   # firma ricalcolata dal server
+            else:
+                # RETE DI SICUREZZA: righe vecchie senza testo -> si tiene l'hash
+                # del browser. Nessuna riga viene mai persa dall'indice.
+                h = f.get("hash")
+                if not h:
+                    continue
+                lib_r, _, resto = testo.partition("::")
+                scelte = resto.split("|") if resto else []
             con.execute(
                 "INSERT OR REPLACE INTO firme(firma,numero,cliente_cod,data,descrizione,prezzo,firma_testo,scelte_json,lib) VALUES(?,?,?,?,?,?,?,?,?);",
                 (h, numero, cliente_cod, data_oggi, riga.get("descrizione"),
@@ -266,12 +310,14 @@ Schema:{"shape":"RETT|POLY|ELL|LIBERO","rett":{"L":n,"P":n,"R":n},"poly":{"n":in
 Regole: triangolo->POLY n=3, esagono->POLY n=6, dodecagono/12 lati->POLY n=12, "diametro/lato"->poly.d. Rettangolo/lastra->RETT. Ovale/ellittico->ELL. Sagoma irregolare->LIBERO. "foro centrale"->cx=0,cy=0. Strati dall'alto. Materiale mancante->plausibile + voce in dubbi. Clienti: Materassificio Veneto=MATVEN, Nautica Adria=NAUADR, Ospedaliera Med=MEDSRL, else NUOVO."""
 
 @app.get("/api/gia_fatto")
-def gia_fatto(firma: str = "", cliente: str = ""):
+def gia_fatto(firma: str = "", cliente: str = "", testo: str = ""):
     """RICONOSCIMENTO: data una firma (hash), dice se quel prodotto è già stato
     fatto, e per chi. È il motore del 'già fatto / per questo cliente / per altri'.
     Cerca dentro i payload salvati la firma esatta (hash indicizzabile)."""
+    if testo:                      # se arriva il testo, la firma la calcola il server
+        firma, _lib, _sc = firma_da_testo(testo)
     if not firma:
-        raise HTTPException(400, "manca il parametro firma")
+        raise HTTPException(400, "manca il parametro firma (o testo)")
     con = get_con()
     # RICERCA INDICIZZATA: salta diretta alle righe con questa firma (idx_firme_firma).
     # Costa uguale con 18 ordini o con 15 milioni: millisecondi.
@@ -314,12 +360,17 @@ def reindex_firme():
             continue
         for riga in (pay.get("righe") or []):
             f = (riga.get("firma") or {})
-            h = f.get("hash")
-            if not h:
-                continue
             testo = f.get("testo") or ""
-            lib_r, _, resto = testo.partition("::")
-            scelte = resto.split("|") if resto else []
+            if testo:
+                h, lib_r, scelte = firma_da_testo(testo)   # firma ricalcolata dal server
+            else:
+                # RETE DI SICUREZZA: righe vecchie senza testo -> si tiene l'hash
+                # del browser. Nessuna riga viene mai persa dall'indice.
+                h = f.get("hash")
+                if not h:
+                    continue
+                lib_r, _, resto = testo.partition("::")
+                scelte = resto.split("|") if resto else []
             con.execute(
                 "INSERT OR REPLACE INTO firme(firma,numero,cliente_cod,data,descrizione,prezzo,firma_testo,scelte_json,lib) VALUES(?,?,?,?,?,?,?,?,?);",
                 (h, numero, cli, data, riga.get("descrizione"), riga.get("prezzo_unitario"),
