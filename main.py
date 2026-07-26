@@ -414,11 +414,24 @@ def riconosci(body: RiconosciBody):
     esatti = 0
     esempi_cli = []
     esempi_altri = []
+    simili = []                 # somiglianza a punteggio, non solo contenimento
     for numero, cli, data, descr, prezzo, sj in rows:
         try:
             salvate = set(_norm_coppia(x) for x in (json.loads(sj) if sj else []))
         except Exception:
             continue
+        # SOMIGLIANZA: quante delle scelte attuali ritrovo in questo ordine.
+        # Il solo contenimento non basta: appena una scelta diverge (un quarto
+        # strato, un'altezza cambiata) il sottoinsieme fallisce e non si trova
+        # piu' NULLA, proprio quando servirebbe il "ci assomiglia".
+        comuni = scelte & salvate
+        pc = round(len(comuni) * 100 / len(scelte)) if scelte else 0
+        if pc >= 40 and pc < 100:
+            diverse = sorted(x.split("=")[0] for x in (scelte - salvate))
+            simili.append({"numero": numero, "cliente": cli, "data": data,
+                           "descrizione": descr, "prezzo": prezzo,
+                           "percentuale": pc, "differisce_per": diverse[:4],
+                           "mio_cliente": bool(body.cliente and cli == body.cliente)})
         if scelte.issubset(salvate):          # l'ordine contiene tutte le scelte fatte finora
             e_esatto = (scelte == salvate)
             if e_esatto:
@@ -438,7 +451,9 @@ def riconosci(body: RiconosciBody):
         "per_altri": per_altri,
         "esatto": esatti > 0,
         "esempi_cliente": esempi_cli,
-        "esempi_altri": esempi_altri
+        "esempi_altri": esempi_altri,
+        "simili": len(simili),
+        "esempi_simili": sorted(simili, key=lambda x: (-x["percentuale"], not x["mio_cliente"]))[:3]
     }
 
 
