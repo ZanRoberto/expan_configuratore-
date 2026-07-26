@@ -15,6 +15,7 @@ NOTA ONESTA: questo file non è stato eseguito nell'ambiente di sviluppo
 primo deploy su Render, leggendo i log. Il CUORE (numerazione atomica) è
 invece già stato testato a parte con 50 richieste concorrenti: zero collisioni.
 """
+from pydantic import BaseModel
 import os, sqlite3, datetime, json, base64, hmac
 import urllib.request, urllib.error
 from fastapi import FastAPI, HTTPException, Header, Request, Body, Response
@@ -89,6 +90,23 @@ def init_db():
         stato TEXT NOT NULL DEFAULT 'bozza',   -- bozza | confermata | passata
         creata_da TEXT,
         payload_json TEXT);
+    -- INDICE FIRME: una riga per ogni prodotto-firma di ogni ordine.
+    -- Separata dal JSON e indicizzata -> ricerca 'gia' fatto' istantanea a
+    -- qualsiasi dimensione (anni di ordini). Si prevengono le lentezze future.
+    CREATE TABLE IF NOT EXISTS firme(
+        firma        TEXT NOT NULL,          -- hash corto della configurazione
+        numero       TEXT NOT NULL,          -- l'ordine che la contiene
+        cliente_cod  TEXT,
+        data         TEXT,
+        descrizione  TEXT,
+        prezzo       REAL,
+        firma_testo  TEXT,                   -- leggibile: cosa rappresenta
+        scelte_json  TEXT,                   -- le scelte [campo=valore] per il matching progressivo
+        lib          TEXT,                   -- il prodotto (per filtrare)
+        PRIMARY KEY(firma, numero)
+    );
+    CREATE INDEX IF NOT EXISTS idx_firme_firma   ON firme(firma);
+    CREATE INDEX IF NOT EXISTS idx_firme_cliente ON firme(cliente_cod);
     """)
     con.commit(); con.close()
 
@@ -105,10 +123,26 @@ def assegna_numero(con, cliente_cod, creata_da, payload):
         nuovo = 1 if anno_salv != anno else valore + 1
         con.execute("UPDATE contatori SET valore=?, anno=? WHERE chiave='offerta';", (nuovo, anno))
     numero = f"OFF-{anno}-{nuovo:04d}"
+    data_oggi = datetime.date.today().isoformat()
     con.execute(
         "INSERT INTO offerte(numero,data,cliente_cod,stato,creata_da,payload_json) VALUES(?,?,?,?,?,?);",
-        (numero, datetime.date.today().isoformat(), cliente_cod, 'bozza', creata_da,
+        (numero, data_oggi, cliente_cod, 'bozza', creata_da,
          json.dumps(payload, ensure_ascii=False) if payload is not None else None))
+    # popolo l'INDICE FIRME: una riga per ogni prodotto con firma nel payload
+    if payload:
+        for riga in (payload.get("righe") or []):
+            f = (riga.get("firma") or {})
+            h = f.get("hash")
+            if not h:
+                continue
+            testo = f.get("testo") or ""
+            lib_r, _, resto = testo.partition("::")
+            scelte = resto.split("|") if resto else []
+            con.execute(
+                "INSERT OR REPLACE INTO firme(firma,numero,cliente_cod,data,descrizione,prezzo,firma_testo,scelte_json,lib) VALUES(?,?,?,?,?,?,?,?,?);",
+                (h, numero, cliente_cod, data_oggi, riga.get("descrizione"),
+                 riga.get("prezzo_unitario"), testo,
+                 json.dumps(scelte, ensure_ascii=False), lib_r))
     con.execute("COMMIT;")
     return numero
 
@@ -230,6 +264,124 @@ DEEPSEEK_URL = "https://api.deepseek.com/chat/completions"
 PROMPT_PARSER = """Sei il parser di un configuratore di pressati in schiuma (profilo 2D estruso). Converti la richiesta in JSON. Rispondi SOLO con JSON valido, nessun testo, nessun markdown.
 Schema:{"shape":"RETT|POLY|ELL|LIBERO","rett":{"L":n,"P":n,"R":n},"poly":{"n":int,"d":n,"rot":n},"ell":{"a":n,"b":n},"strati":[{"materiale":"PU25|HR30|HR35|MEMORY50|GEL55","spessore_cm":n}],"fori":[{"d":n,"cx":n,"cy":n}],"canali":{"num":int,"larghezza_cm":n,"profondita_cm":n},"bugnato":bool,"estetica":"stringa o vuoto","quantita":int,"cliente":"MATVEN|NAUADR|MEDSRL|NUOVO","dubbi":["campo: motivo"]}
 Regole: triangolo->POLY n=3, esagono->POLY n=6, dodecagono/12 lati->POLY n=12, "diametro/lato"->poly.d. Rettangolo/lastra->RETT. Ovale/ellittico->ELL. Sagoma irregolare->LIBERO. "foro centrale"->cx=0,cy=0. Strati dall'alto. Materiale mancante->plausibile + voce in dubbi. Clienti: Materassificio Veneto=MATVEN, Nautica Adria=NAUADR, Ospedaliera Med=MEDSRL, else NUOVO."""
+
+@app.get("/api/gia_fatto")
+def gia_fatto(firma: str = "", cliente: str = ""):
+    """RICONOSCIMENTO: data una firma (hash), dice se quel prodotto è già stato
+    fatto, e per chi. È il motore del 'già fatto / per questo cliente / per altri'.
+    Cerca dentro i payload salvati la firma esatta (hash indicizzabile)."""
+    if not firma:
+        raise HTTPException(400, "manca il parametro firma")
+    con = get_con()
+    # RICERCA INDICIZZATA: salta diretta alle righe con questa firma (idx_firme_firma).
+    # Costa uguale con 18 ordini o con 15 milioni: millisecondi.
+    rows = con.execute(
+        "SELECT numero, data, cliente_cod, descrizione, prezzo FROM firme WHERE firma=? ORDER BY data DESC",
+        (firma,)
+    ).fetchall()
+    con.close()
+    per_cliente, per_altri = [], []
+    for numero, data, cli, descr, prezzo in rows:
+        voce = {"numero": numero, "data": data, "cliente": cli,
+                "descrizione": descr, "prezzo": prezzo}
+        if cliente and cli == cliente:
+            per_cliente.append(voce)
+        else:
+            per_altri.append(voce)
+    return {
+        "firma": firma,
+        "gia_fatto": bool(rows),
+        "per_questo_cliente": per_cliente,
+        "per_altri_clienti": per_altri,
+        "quante_volte": len(rows)
+    }
+
+
+@app.post("/api/reindex_firme")
+def reindex_firme():
+    """Ricostruisce l'indice firme dai payload gia' salvati. Utile una volta,
+    dopo aver introdotto l'indice, per gli ordini caricati prima."""
+    con = get_con()
+    con.execute("DELETE FROM firme;")
+    rows = con.execute("SELECT numero, data, cliente_cod, payload_json FROM offerte").fetchall()
+    n = 0
+    for numero, data, cli, pj in rows:
+        if not pj:
+            continue
+        try:
+            pay = json.loads(pj)
+        except Exception:
+            continue
+        for riga in (pay.get("righe") or []):
+            f = (riga.get("firma") or {})
+            h = f.get("hash")
+            if not h:
+                continue
+            testo = f.get("testo") or ""
+            lib_r, _, resto = testo.partition("::")
+            scelte = resto.split("|") if resto else []
+            con.execute(
+                "INSERT OR REPLACE INTO firme(firma,numero,cliente_cod,data,descrizione,prezzo,firma_testo,scelte_json,lib) VALUES(?,?,?,?,?,?,?,?,?);",
+                (h, numero, cli, data, riga.get("descrizione"), riga.get("prezzo_unitario"),
+                 testo, json.dumps(scelte, ensure_ascii=False), lib_r))
+            n += 1
+    con.commit(); con.close()
+    return {"reindicizzate": n}
+
+
+class RiconosciBody(BaseModel):
+    lib: str = ""
+    scelte: list = []
+    cliente: str = ""
+
+@app.post("/api/riconosci")
+def riconosci(body: RiconosciBody):
+    """RICONOSCIMENTO PROGRESSIVO: date le scelte fatte FINORA, trova gli ordini
+    che le contengono TUTTE (sottoinsieme). Man mano che le scelte crescono, i
+    candidati calano \u2014 l'imbuto. Distingue: esatto (stesse identiche scelte)
+    da parziale (le contiene ma ha anche altro)."""
+    scelte = set(body.scelte or [])
+    if not scelte:
+        return {"gia_fatto": False, "quanti": 0, "per_cliente": 0, "per_altri": 0, "esatto": False, "esempi": []}
+    con = get_con()
+    # filtro per prodotto sull'indice; poi il match sottoinsieme in Python
+    rows = con.execute(
+        "SELECT numero, cliente_cod, data, descrizione, prezzo, scelte_json FROM firme WHERE lib=?",
+        (body.lib,)
+    ).fetchall()
+    con.close()
+    per_cliente = 0
+    per_altri = 0
+    esatti = 0
+    esempi_cli = []
+    esempi_altri = []
+    for numero, cli, data, descr, prezzo, sj in rows:
+        try:
+            salvate = set(json.loads(sj) if sj else [])
+        except Exception:
+            continue
+        if scelte.issubset(salvate):          # l'ordine contiene tutte le scelte fatte finora
+            e_esatto = (scelte == salvate)
+            if e_esatto:
+                esatti += 1
+            voce = {"numero": numero, "cliente": cli, "data": data,
+                    "descrizione": descr, "prezzo": prezzo, "esatto": e_esatto}
+            if body.cliente and cli == body.cliente:
+                per_cliente += 1
+                if len(esempi_cli) < 3: esempi_cli.append(voce)
+            else:
+                per_altri += 1
+                if len(esempi_altri) < 3: esempi_altri.append(voce)
+    return {
+        "gia_fatto": (per_cliente + per_altri) > 0,
+        "quanti": per_cliente + per_altri,
+        "per_cliente": per_cliente,
+        "per_altri": per_altri,
+        "esatto": esatti > 0,
+        "esempi_cliente": esempi_cli,
+        "esempi_altri": esempi_altri
+    }
+
 
 @app.post("/api/interpreta")
 async def interpreta(request: Request):
