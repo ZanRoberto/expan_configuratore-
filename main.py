@@ -391,14 +391,22 @@ def riconosci(body: RiconosciBody):
     che le contengono TUTTE (sottoinsieme). Man mano che le scelte crescono, i
     candidati calano \u2014 l'imbuto. Distingue: esatto (stesse identiche scelte)
     da parziale (le contiene ma ha anche altro)."""
-    scelte = set(body.scelte or [])
+    # Le scelte arrivano dal browser come le scrive lui (minuscole, unita' di
+    # misura, spazi). Nell'indice sono salvate normalizzate. Vanno normalizzate
+    # ANCHE in lettura, con la stessa funzione: altrimenti 'misura=160x200' non
+    # incontrerebbe mai 'MISURA=160X200' e il confronto darebbe sempre zero.
+    def _norm_coppia(x):
+        k, sep, v = str(x).partition("=")
+        return _norm_scelta(k) + "=" + _norm_scelta(v) if sep else _norm_scelta(x)
+    scelte = set(_norm_coppia(x) for x in (body.scelte or []) if str(x).strip())
+    lib_n = _norm_scelta(body.lib)
     if not scelte:
         return {"gia_fatto": False, "quanti": 0, "per_cliente": 0, "per_altri": 0, "esatto": False, "esempi": []}
     con = get_con()
     # filtro per prodotto sull'indice; poi il match sottoinsieme in Python
     rows = con.execute(
         "SELECT numero, cliente_cod, data, descrizione, prezzo, scelte_json FROM firme WHERE lib=?",
-        (body.lib,)
+        (lib_n,)
     ).fetchall()
     con.close()
     per_cliente = 0
@@ -408,7 +416,7 @@ def riconosci(body: RiconosciBody):
     esempi_altri = []
     for numero, cli, data, descr, prezzo, sj in rows:
         try:
-            salvate = set(json.loads(sj) if sj else [])
+            salvate = set(_norm_coppia(x) for x in (json.loads(sj) if sj else []))
         except Exception:
             continue
         if scelte.issubset(salvate):          # l'ordine contiene tutte le scelte fatte finora
