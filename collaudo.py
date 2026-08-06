@@ -89,6 +89,18 @@ PROVE = [
   "CONTROLLO DEL NOME MENTRE SI SCRIVE", False,
   "si scopre di aver creato un doppione solo alla fine, a lavoro gia' fatto (05ago)"),
 
+ ("Pressato: forma + strati + fori generati",
+  "function distinta3dPressato", False,
+  "il pressato non si puo' comporre: niente triangolo a 3 strati con 2 fori (05ago)"),
+
+ ("Fori come buchi passanti nell'estrusione",
+  "sh.holes.push", False,
+  "i fori tornano a essere cilindri appoggiati sopra invece che buchi veri (05ago)"),
+
+ ("Elenco fori disponibile",
+  "function foriElemento", False,
+  "non c'e' modo di aggiungere e togliere fori come si fa con gli strati (05ago)"),
+
  ("Lastra: onde lungo la lunghezza, facce esterne piatte, annidamento",
   "pianoSu", False,
   "onde nel verso sbagliato, spessore variabile, strati che non si annidano (04ago)"),
@@ -124,7 +136,40 @@ PROVE = [
   True),   # invertita
 ]
 
+SERVER = [
+ ("Backup del database",        "/api/backup",  "senza backup, se salta il disco il cliente perde mondi e archivio (05ago)"),
+ ("Stato dell'istanza",         "/api/stato",   "non si sa come sta un'istanza finche' non chiama il cliente (05ago)"),
+ ("Copia coerente, non copia del file", "src.backup(dst)", "un file copiato a caldo puo' uscire corrotto (05ago)"),
+ ("Backup automatico in sottofondo", "_ciclo_backup", "il backup torna a dipendere dal fatto che qualcuno se lo ricordi (05ago)"),
+ ("Rotazione delle copie",        "BACKUP_TIENI",  "le copie si accumulano finche' riempiono il disco (05ago)"),
+ ("Numerazione atomica offerte", "BEGIN IMMEDIATE", "due offerte possono prendere lo stesso numero"),
+ ("Riconoscimento incrementale", "/api/riconosci", "il pannello del gia' fatto smette di funzionare"),
+]
+
+def collauda_server(path):
+    """Il server non si tocca quasi mai, ma quando si tocca deve PARTIRE."""
+    print("\n  SERVER  ·  " + path)
+    print("  " + "-" * 74)
+    s = open(path, encoding='utf-8', errors='replace').read()
+    rotti = []
+    import py_compile, tempfile
+    try:
+        py_compile.compile(path, cfile=tempfile.mktemp(), doraise=True)
+        print("  OK     Sintassi Python")
+    except Exception as e:
+        print("  ROTTO  Sintassi Python: " + str(e)); rotti.append(("Sintassi", str(e)))
+    for nome, marc, danno in SERVER:
+        ok = marc in s
+        print(("  OK     " if ok else "  ROTTO  ") + nome)
+        if not ok: rotti.append((nome, danno))
+    print("  " + "-" * 74)
+    print("  RICORDA: prima del push lancia  python -c \"import main\"")
+    print("  La sintassi non basta: un file che compila puo' comunque non partire.\n")
+    return rotti
+
 def main():
+    if len(sys.argv) > 1 and sys.argv[1].endswith('.py'):
+        sys.exit(1 if collauda_server(sys.argv[1]) else 0)
     # senza argomenti collauda il file del configuratore nella cartella corrente:
     # sta nel repo accanto al codice, quindi basta "python collaudo.py"
     path = sys.argv[1] if len(sys.argv) > 1 else 'configuratore_expan_v2.html'
