@@ -16,7 +16,7 @@ primo deploy su Render, leggendo i log. Il CUORE (numerazione atomica) è
 invece già stato testato a parte con 50 richieste concorrenti: zero collisioni.
 """
 from pydantic import BaseModel
-import os, sqlite3, datetime, json, base64, hmac
+import os, sqlite3, datetime, json, base64, hmac, tempfile, shutil, asyncio, glob
 import urllib.request, urllib.error
 from fastapi import FastAPI, HTTPException, Header, Request, Body, Response
 from fastapi.responses import JSONResponse, HTMLResponse, FileResponse
@@ -26,10 +26,21 @@ from contextlib import asynccontextmanager
 DB_PATH   = os.environ.get("DB_PATH", "./data/expan.db")   # cartella locale del progetto, sempre scrivibile
 API_KEY   = os.environ.get("EXPORT_API_KEY", "cambia-questa-chiave")
 HTML_FILE = os.environ.get("HTML_FILE", "configuratore_expan_v2.html")
+# (05ago2026) Chiave del backup. Se non la imposti su Render vale quella dell'export.
+BACKUP_KEY = os.environ.get("BACKUP_KEY", "") or API_KEY
+MARCHIO    = os.environ.get("MARCHIO", "expan")   # serve solo a dare un nome al file di backup
+# (05ago2026) Backup automatico: nessuno deve ricordarsi di farlo.
+BACKUP_ORE    = int(os.environ.get("BACKUP_ORE", "24"))      # ogni quante ore
+BACKUP_TIENI  = int(os.environ.get("BACKUP_TIENI", "14"))    # quante copie conservare
+BACKUP_DIR    = os.environ.get("BACKUP_DIR", "") or os.path.join(os.path.dirname(DB_PATH) or ".", "backup")
 
 @asynccontextmanager
 async def lifespan(app):
     init_db()
+    try:
+        asyncio.create_task(_ciclo_backup())      # (05ago2026) backup automatico, senza schedulatori esterni
+    except Exception:
+        pass
     yield
 
 app = FastAPI(title="EXPAN Configuratore", version="1.0", lifespan=lifespan)
@@ -150,6 +161,165 @@ def assegna_numero(con, cliente_cod, creata_da, payload):
 @app.get("/api/health")
 def health():
     return {"status": "ok", "db": DB_PATH, "time": datetime.datetime.now().isoformat(timespec="seconds")}
+
+
+# ══════════════════ BACKUP E STATO ══════════════════
+# (05ago2026) Render non restituisce il database di ieri: il backup lo si porta fuori.
+# Il file NON si copia mentre il server scrive: si usa la copia coerente di SQLite
+# (con.backup), che aspetta le scritture in corso e produce un file integro.
+
+def _copia_db(dest):
+    """Copia coerente del database: aspetta le scritture in corso, produce un file integro."""
+    src = dst = None
+    try:
+        src = sqlite3.connect(DB_PATH, timeout=60)
+        dst = sqlite3.connect(dest)
+        with dst:
+            src.backup(dst)
+    finally:
+        for c in (src, dst):
+            try:
+                if c: c.close()
+            except Exception:
+                pass
+    return dest
+
+def _elenco_backup():
+    try:
+        f = sorted(glob.glob(os.path.join(BACKUP_DIR, "auto_*.db")))
+        return f
+    except Exception:
+        return []
+
+def _fai_backup_automatico():
+    """Una copia sul disco, con rotazione. Torna il percorso, o None se non serviva."""
+    try:
+        os.makedirs(BACKUP_DIR, exist_ok=True)
+    except Exception:
+        return None
+    esistenti = _elenco_backup()
+    if esistenti:
+        try:
+            ultimo = os.path.getmtime(esistenti[-1])
+            if (datetime.datetime.now().timestamp() - ultimo) < BACKUP_ORE * 3600:
+                return None                      # troppo presto: uno di oggi c'e' gia'
+        except Exception:
+            pass
+    nome = os.path.join(BACKUP_DIR, "auto_%s.db" % datetime.datetime.now().strftime("%Y%m%d_%H%M"))
+    try:
+        _copia_db(nome)
+    except Exception:
+        return None
+    for vecchio in _elenco_backup()[:-BACKUP_TIENI]:   # tengo solo le ultime N
+        try:
+            os.remove(vecchio)
+        except Exception:
+            pass
+    return nome
+
+async def _ciclo_backup():
+    """Gira in sottofondo. Controlla ogni ora: se l'ultima copia ha piu' di
+    BACKUP_ORE, ne fa una. Cosi' funziona anche se il servizio viene riavviato
+    spesso, senza dipendere da un orario preciso ne' da uno schedulatore esterno."""
+    while True:
+        try:
+            _fai_backup_automatico()
+        except Exception:
+            pass
+        await asyncio.sleep(3600)
+
+def _dim_db():
+    try:
+        return os.path.getsize(DB_PATH)
+    except Exception:
+        return 0
+
+@app.get("/api/backup")
+def api_backup(key: str = ""):
+    """Copia coerente del database. Uso: /api/backup?key=LA_TUA_CHIAVE"""
+    if not BACKUP_KEY or not hmac.compare_digest(str(key), str(BACKUP_KEY)):
+        raise HTTPException(status_code=401, detail="chiave non valida")
+    if not os.path.exists(DB_PATH):
+        raise HTTPException(status_code=404, detail="database non trovato: " + DB_PATH)
+    tmpdir = tempfile.mkdtemp(prefix="bk_")
+    dest = os.path.join(tmpdir, "copia.db")
+    src = dst = None
+    try:
+        src = sqlite3.connect(DB_PATH, timeout=60)
+        dst = sqlite3.connect(dest)
+        with dst:
+            src.backup(dst)          # copia coerente, anche a server acceso
+    except Exception as e:
+        try: shutil.rmtree(tmpdir, ignore_errors=True)
+        except Exception: pass
+        raise HTTPException(status_code=500, detail="backup non riuscito: " + str(e))
+    finally:
+        for c in (src, dst):
+            try:
+                if c: c.close()
+            except Exception:
+                pass
+    nome = "backup_%s_%s.db" % (MARCHIO, datetime.datetime.now().strftime("%Y%m%d_%H%M"))
+    return FileResponse(dest, filename=nome, media_type="application/octet-stream")
+
+@app.get("/api/backup/ultimo")
+def api_backup_ultimo(key: str = ""):
+    """Scarica l'ultima copia automatica gia' fatta (non ne crea una nuova)."""
+    if not BACKUP_KEY or not hmac.compare_digest(str(key), str(BACKUP_KEY)):
+        raise HTTPException(status_code=401, detail="chiave non valida")
+    bk = _elenco_backup()
+    if not bk:
+        raise HTTPException(status_code=404, detail="nessun backup automatico ancora presente")
+    return FileResponse(bk[-1], filename=os.path.basename(bk[-1]), media_type="application/octet-stream")
+
+@app.get("/api/stato")
+def api_stato(key: str = ""):
+    """Come sta questa istanza: serve a saperlo PRIMA che chiami il cliente."""
+    if not BACKUP_KEY or not hmac.compare_digest(str(key), str(BACKUP_KEY)):
+        raise HTTPException(status_code=401, detail="chiave non valida")
+    out = {
+        "marchio": MARCHIO,
+        "ora": datetime.datetime.now().isoformat(timespec="seconds"),
+        "db_path": DB_PATH,
+        "db_byte": _dim_db(),
+        "db_su_disco_persistente": DB_PATH.startswith("/var/data"),
+        "html": HTML_FILE,
+    }
+    # backup: quando e' stato fatto l'ultimo e se e' in ritardo
+    bk = _elenco_backup()
+    out["backup_quanti"] = len(bk)
+    out["backup_cartella"] = BACKUP_DIR
+    if bk:
+        try:
+            ts = os.path.getmtime(bk[-1])
+            ore = (datetime.datetime.now().timestamp() - ts) / 3600.0
+            out["backup_ultimo"] = datetime.datetime.fromtimestamp(ts).isoformat(timespec="seconds")
+            out["backup_ore_fa"] = round(ore, 1)
+            out["backup_in_ritardo"] = ore > (BACKUP_ORE * 2)
+            out["backup_byte"] = os.path.getsize(bk[-1])
+        except Exception:
+            pass
+    else:
+        out["backup_ultimo"] = None
+        out["backup_in_ritardo"] = True
+    try:
+        con = get_con()
+        cur = con.cursor()
+        for tab, chiave in (("offerte", "offerte"), ("firme", "firme"), ("anagrafica", "anagrafica")):
+            try:
+                cur.execute("SELECT COUNT(*) FROM %s" % tab)
+                out[chiave] = cur.fetchone()[0]
+            except Exception:
+                out[chiave] = None
+        try:
+            cur.execute("SELECT MAX(data) FROM offerte")
+            out["ultima_offerta"] = cur.fetchone()[0]
+        except Exception:
+            out["ultima_offerta"] = None
+        con.close()
+    except Exception as e:
+        out["errore_db"] = str(e)
+    return out
 
 @app.post("/api/offerte")
 async def crea_offerta(request: Request):
