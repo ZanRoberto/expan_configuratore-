@@ -1,0 +1,17 @@
+10,*,Per chi è questo materasso?,destinazione,scelta,Casa|Hotel|Struttura sanitaria|Nautica,,Determina normative e finiture
+20,*,Quante persone ci dormono?,persone,scelta,Una|Due,,
+30,*,Quanto pesa la persona che ci dorme?,peso,scelta,fino a 70 kg|70-95 kg|95-120 kg|oltre 120 kg,persone è Una,Serve per la portanza
+35,*,Quanto pesa il più pesante dei due?,peso,scelta,fino a 70 kg|70-95 kg|95-120 kg|oltre 120 kg,persone è Due,Sul lato più caricato
+40,*,I due dormono con esigenze diverse?,differenziato,sino,,persone è Due,Se sì servono due portanze
+50,*,Chi ci dorme suda molto o ha problemi di traspirazione?,traspirazione,sino,,,Orienta verso materiali a celle aperte
+60,*,Su che tecnologia ci orientiamo?,tecnologia,scelta,Molle insacchettate|Schiuma|Memory|Lattice,,È la scelta che determina la stratigrafia
+70,*,Quante molle per metro quadro?,mollemq,scelta,500|800|1000,tecnologia è Molle,Più molle = maggiore indipendenza
+80,*,Serve fodera sfoderabile e lavabile?,sfoderabile,sino,,,
+90,*,A che temperatura va lavata?,lavaggio,scelta,30°|60°|90°,sfoderabile è sì,Sopra i 60° servono tessuti tecnici
+100,*,Va consegnato arrotolato o disteso?,imballo,scelta,Arrotolato|Disteso,,L'arrotolato non è possibile con le molle
+120,materasso,Che misura?,misura,scelta,80x190|80x200|90x200|120x200|160x200|180x200,,Misura a catalogo
+130,materasso_damiano,Che lunghezza?,lunghezza,scelta,1900|2000|2100,,in millimetri
+140,materasso_damiano,Che larghezza?,larghezza,scelta,800|900|1200|1600|1800,,in millimetri
+150,materasso_damiano,Quante onde?,onde,scelta,3|5|7|9,,Il profilo ondulato del Damiano
+160,*,Quanti pezzi prevede l'ordine?,quantita,scelta,1-5|6-20|21-50|oltre 50,,Incide su imballo e trasporto
+170,*,Il cliente ha un capitolato da rispettare?,capitolato,sino,,,Se sì allegalo all'offerta
