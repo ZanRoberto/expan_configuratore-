@@ -1,0 +1,640 @@
+<!DOCTYPE html>
+<html lang="it"><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Metodo Matrice — Manuale d'uso</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500&family=IBM+Plex+Sans+Condensed:wght@600&display=swap" rel="stylesheet">
+<style>
+:root{--ink:#14181F;--paper:#F3F1EC;--card:#FBFAF7;--line:#E2DED5;--petrol:#0E6B66;
+ --amber:#E8A33D;--grey:#6E7680;--red:#8A4444;
+ --sans:'IBM Plex Sans',system-ui,sans-serif;--cond:'IBM Plex Sans Condensed',sans-serif;
+ --mono:'IBM Plex Mono',ui-monospace,monospace;}
+*{box-sizing:border-box}
+body{margin:0;background:var(--paper);color:var(--ink);font-family:var(--sans);
+ font-size:15.5px;line-height:1.7;-webkit-font-smoothing:antialiased}
+.wrap{max-width:860px;margin:0 auto;padding:0 26px 90px}
+.top{background:var(--ink);color:#F2F4F0;padding:34px 26px 30px;margin-bottom:34px}
+.top .in{max-width:860px;margin:0 auto}
+.top .eyebrow{font-family:var(--mono);font-size:11px;letter-spacing:1.6px;color:var(--amber)}
+.top h1{font-family:var(--cond);font-size:40px;font-weight:600;margin:8px 0 6px;line-height:1.1}
+.top p{color:#9AA2AC;font-size:14px;margin:0}
+.idx{background:var(--card);border:1px solid var(--line);border-radius:3px;padding:16px 20px;margin-bottom:34px}
+.idx a{display:block;padding:5px 0;color:var(--petrol);text-decoration:none;font-size:14px;border-bottom:1px solid var(--line)}
+.idx a:last-child{border-bottom:0}
+.idx a:hover{text-decoration:underline}
+h1{font-family:var(--cond);font-size:30px;font-weight:600;margin:52px 0 6px;padding-top:20px;
+ border-top:2px solid var(--ink);letter-spacing:-.2px}
+h1:first-of-type{margin-top:0}
+h2{font-family:var(--cond);font-size:22px;font-weight:600;margin:34px 0 10px;color:var(--petrol)}
+h3{font-family:var(--mono);font-size:12px;font-weight:500;letter-spacing:.12em;color:var(--grey);
+ margin:26px 0 8px;text-transform:uppercase}
+p{margin:0 0 14px}
+table{width:100%;border-collapse:collapse;margin:16px 0 22px;background:var(--card);
+ border:1px solid var(--line);font-size:14px}
+th{font-family:var(--mono);font-size:10.5px;letter-spacing:.1em;text-transform:uppercase;
+ color:var(--grey);text-align:left;padding:10px 12px;border-bottom:1px solid var(--line);font-weight:400}
+td{padding:10px 12px;border-bottom:1px solid var(--line);vertical-align:top}
+tr:last-child td{border-bottom:0}
+code{font-family:var(--mono);font-size:.88em;background:#EFEDE7;padding:2px 6px;border-radius:2px}
+pre{background:var(--ink);color:#E8EAE6;padding:16px 18px;border-radius:3px;overflow-x:auto;
+ font-family:var(--mono);font-size:13px;line-height:1.6}
+pre code{background:none;padding:0;color:inherit}
+blockquote{border-left:3px solid var(--amber);margin:18px 0;padding:2px 0 2px 18px;color:var(--grey)}
+ul,ol{margin:0 0 16px;padding-left:22px}
+li{margin-bottom:6px}
+hr{border:0;border-top:1px solid var(--line);margin:36px 0}
+em{color:var(--grey)}
+strong{font-weight:600}
+/* i richiami ⚠ */
+p:has(> em:first-child), p{}
+@media print{
+ body{background:#fff;font-size:11pt}
+ .top{background:#fff;color:#000;border-bottom:2px solid #000;padding:0 0 16px;margin-bottom:24px}
+ .top .eyebrow{color:#666}.top p{color:#666}
+ .idx{display:none}
+ h1{page-break-after:avoid;border-top:1px solid #000}
+ table,pre{page-break-inside:avoid}
+ pre{background:#f4f4f4;color:#000;border:1px solid #ccc}
+}
+</style></head><body>
+<div class="top"><div class="in">
+  <div class="eyebrow">METODO MATRICE</div>
+  <h1>Manuale d'uso</h1>
+  <p>Scritto sull'applicazione reale — 11 agosto 2026</p>
+</div></div>
+<div class="wrap">
+<div class="idx"><a href="#metodo-matrice-manuale-duso">METODO MATRICE — MANUALE D'USO</a><a href="#1-i-tre-ruoli">1 · I TRE RUOLI</a><a href="#2-il-giro-normale-dalla-richiesta-allofferta">2 · IL GIRO NORMALE — dalla richiesta all'offerta</a><a href="#3-lintervista">3 · L'INTERVISTA</a><a href="#4-le-regole">4 · LE REGOLE</a><a href="#5-le-anagrafiche">5 · LE ANAGRAFICHE</a><a href="#6-i-prodotti">6 · I PRODOTTI</a><a href="#7-mondi-e-ambiente-cliente">7 · MONDI E AMBIENTE CLIENTE</a><a href="#8-quello-che-il-sistema-non-fa">8 · QUELLO CHE IL SISTEMA NON FA</a><a href="#9-i-dieci-errori-che-costano-piu-tempo">9 · I DIECI ERRORI CHE COSTANO PIÙ TEMPO</a><a href="#10-il-collegamento-con-il-manuale-operativo">10 · IL COLLEGAMENTO CON IL MANUALE OPERATIVO</a></div>
+<h1 id="metodo-matrice-manuale-duso">METODO MATRICE — MANUALE D'USO</h1>
+<p><em>Scritto sull'applicazione reale, non su come dovrebbe essere.
+Versione 11 agosto 2026.</em></p>
+<hr />
+<h2 id="come-leggere-questo-manuale">COME LEGGERE QUESTO MANUALE</h2>
+<p>Le sezioni <strong>1–3</strong> servono a chi usa il sistema tutti i giorni.
+Le sezioni <strong>4–7</strong> a chi lo governa: regole, anagrafiche, prodotti.
+La sezione <strong>8</strong> è l'elenco delle cose che il sistema <strong>non</strong> fa — leggila prima di
+prometterle a un cliente.</p>
+<p>Ogni volta che compare il segno ⚠ c'è una cosa che si dimentica facilmente e che
+costa tempo o errori.</p>
+<hr />
+<h1 id="1-i-tre-ruoli">1 · I TRE RUOLI</h1>
+<p>Il sistema si comporta in modo diverso a seconda di chi lo sta usando.</p>
+<table>
+<thead>
+<tr>
+<th>ruolo</th>
+<th>cosa vede</th>
+<th>come si attiva</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><strong>operatore</strong></td>
+<td>prodotto, prezzo, offerta</td>
+<td>è il modo normale</td>
+</tr>
+<tr>
+<td><strong>supervisor</strong></td>
+<td>+ analisi costi, Officina, anagrafica, mondi</td>
+<td>pulsante <code>ruolo:</code> in alto</td>
+</tr>
+<tr>
+<td><strong>responsabile regole</strong></td>
+<td>+ il quadro regole e la loro modifica</td>
+<td>pulsante <code>R ⚿</code> + password</td>
+</tr>
+</tbody>
+</table>
+<p>⚠ Il pulsante <code>R ⚿</code> è <strong>separato dal ruolo</strong>. Un supervisor senza la password non
+vede né modifica le regole. La password si cambia nel file: cerca
+<code>REGOLE_PWD_SHA</code> e sostituisci l'impronta SHA-256 della nuova.</p>
+<p>⚠ L'apertura delle regole dura <strong>quanto la scheda del browser</strong>. Chiudendola si
+richiude da sola.</p>
+<hr />
+<h1 id="2-il-giro-normale-dalla-richiesta-allofferta">2 · IL GIRO NORMALE — dalla richiesta all'offerta</h1>
+<h2 id="21-scegliere-il-cliente">2.1 Scegliere il cliente</h2>
+<p>In testa all'ordine. Il cliente decide <strong>listino, ricarico, provvigione</strong> e attiva
+le regole che lo riguardano.</p>
+<p>⚠ Cambiare cliente ricalcola tutto: prezzo, provvigione, regole. Non è un dato
+anagrafico, è una variabile del calcolo.</p>
+<h2 id="22-due-strade-per-configurare">2.2 Due strade per configurare</h2>
+<p><strong>◇ parti dall'intervista</strong> — il sistema fa le domande e propone il prodotto.
+<strong>+ Materasso / + Cuscino / …</strong> — si sceglie il prodotto e si compila a mano.</p>
+<p>Entrambe legittime. Ma il prodotto porta scritto quale hai usato:</p>
+<p><code>◇ da intervista</code> (petrolio) · <code>⚠ senza intervista</code> (ambra)</p>
+<p>⚠ La traccia arriva anche all'ERP, nel campo <code>origine_configurazione</code>. Chi salta
+l'intervista non sbaglia — ma resta scritto, e l'offerta sarà più povera di
+informazioni per chi produce.</p>
+<h2 id="23-registrare">2.3 Registrare</h2>
+<p><strong>Registra ordine</strong> congela la commessa. Da lì il prodotto non si modifica più.</p>
+<p>⚠ Se una regola di <strong>blocco</strong> è violata, la registrazione è impedita e il motivo
+compare in rosso. Non è un avviso da ignorare.</p>
+<hr />
+<h1 id="3-lintervista">3 · L'INTERVISTA</h1>
+<h2 id="31-come-funziona">3.1 Come funziona</h2>
+<p>Le domande si adattano alle risposte. Sopra le domande, il sistema dichiara sempre
+dove sta andando:</p>
+<ul>
+<li><em>"Ancora possibili: Materasso · Cuscino · Damiano"</em> — sta ancora restringendo</li>
+<li><em>"Da qui in poi siamo su Materasso — deciso da: …"</em> — la famiglia si è chiusa</li>
+<li><em>"Nessuna famiglia regge queste risposte"</em> — vicolo cieco, con il motivo</li>
+</ul>
+<h2 id="32-le-risposte-dalla-famiglia">3.2 Le risposte «dalla famiglia»</h2>
+<p>Quando la famiglia si chiude, le domande a cui il prodotto ha già risposto <strong>non
+si fanno</strong>. Compaiono nello storico con l'etichetta <em>dalla famiglia</em>.</p>
+<p>Non è una scorciatoia: chiederle sarebbe una finta scelta.</p>
+<h2 id="33-le-opzioni-spente">3.3 Le opzioni spente</h2>
+<p>Un'opzione che violerebbe una regola di prodotto resta visibile ma <strong>spenta</strong>, con
+il motivo sotto. Non sparisce, così sai dire al cliente perché no.</p>
+<p>⚠ Se <strong>tutte</strong> le opzioni sono spente, il problema è una risposta precedente.
+Torna indietro cliccando una risposta nello storico.</p>
+<h2 id="34-tornare-indietro">3.4 Tornare indietro</h2>
+<p>Ogni risposta nello storico è cliccabile. Ci torni sopra e le successive si
+ricalcolano.</p>
+<h2 id="35-cosa-esce-alla-fine">3.5 Cosa esce alla fine</h2>
+<table>
+<thead>
+<tr>
+<th>caso</th>
+<th>cosa succede</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>il prodotto copre le risposte</td>
+<td>nasce un prodotto normale</td>
+</tr>
+<tr>
+<td>copre meno del 70%, o ci sono differenze</td>
+<td>nasce una <strong>variante da approvare</strong> (viola)</td>
+</tr>
+<tr>
+<td>nessuna famiglia regge</td>
+<td>scegli tu la linea, nasce comunque</td>
+</tr>
+<tr>
+<td>una guardia di prodotto è violata</td>
+<td>non nasce: si dice cosa lo impedisce</td>
+</tr>
+</tbody>
+</table>
+<p>⚠ Le risposte <strong>restano attaccate al prodotto</strong> e viaggiano fino all'ERP. Si vedono
+nel riquadro <em>DALL'INTERVISTA</em>, con il conteggio di quante sono state applicate.</p>
+<p>Una risposta che non trova un campo dove andare è marcata <em>senza campo</em>: resta agli
+atti ma non ha effetto. <strong>Se ce ne sono molte, l'intervista è disallineata dal
+prodotto</strong> e va corretta.</p>
+<hr />
+<h1 id="4-le-regole">4 · LE REGOLE</h1>
+<h2 id="41-dove-vivono">4.1 Dove vivono</h2>
+<table>
+<thead>
+<tr>
+<th>dove</th>
+<th>cosa contiene</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><strong>libreria del prodotto</strong> (Officina)</td>
+<td>vincoli fisici: le guardie</td>
+</tr>
+<tr>
+<td><strong>Anagrafica ▸ REGOLE</strong></td>
+<td>accordi cliente e regole d'azienda</td>
+</tr>
+</tbody>
+</table>
+<h2 id="42-come-si-scrivono-in-italiano">4.2 Come si scrivono — in italiano</h2>
+<pre><code>se altezza totale &gt; 32 allora ricarico +12%
+se cliente è Ospedaliera e area &gt; 3 allora ricarico 1.28
+se paese non è Italia allora ricarico +6%
+se colore è rosso e cliente è Nautica allora blocca
+se materiale è MEMORY allora +8 minuti in Taglio
+sempre ricarico +5%
+</code></pre>
+<p><strong>Confronti:</strong> <code>&gt;</code> <code>&lt;</code> <code>&gt;=</code> <code>&lt;=</code> · <code>è</code> · <code>non è</code> · <code>diverso da</code>
+<strong>Unione:</strong> <code>e</code> · <code>o</code>
+<strong>Senza condizione:</strong> <code>sempre &lt;azione&gt;</code></p>
+<h2 id="43-cosa-puo-fare-una-regola">4.3 Cosa può fare una regola</h2>
+<table>
+<thead>
+<tr>
+<th>azione</th>
+<th>scrittura</th>
+<th>effetto</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>prezzo</td>
+<td><code>prezzo +10%</code></td>
+<td>maggiora il prezzo finale</td>
+</tr>
+<tr>
+<td>ricarico</td>
+<td><code>ricarico 1.28</code> · <code>ricarico +12%</code></td>
+<td>sostituisce il listino</td>
+</tr>
+<tr>
+<td>provvigione</td>
+<td><code>provvigione 3%</code></td>
+<td>fissa la % agente</td>
+</tr>
+<tr>
+<td>tempo</td>
+<td><code>+8 minuti in Taglio</code></td>
+<td>aggiunge minuti a un reparto</td>
+</tr>
+<tr>
+<td>blocco</td>
+<td><code>blocca</code> · <code>vietato</code></td>
+<td>impedisce la registrazione</td>
+</tr>
+<tr>
+<td>avviso</td>
+<td><code>avviso &lt;testo&gt;</code></td>
+<td>messaggio, non ferma</td>
+</tr>
+</tbody>
+</table>
+<h2 id="44-su-cosa-vale-le-colonne-di-regole">4.4 Su cosa vale — le colonne di REGOLE</h2>
+<table>
+<thead>
+<tr>
+<th>cliente</th>
+<th>prodotto</th>
+<th>vale per</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>*</code></td>
+<td><code>*</code></td>
+<td>tutti</td>
+</tr>
+<tr>
+<td><code>MEDSRL</code></td>
+<td><code>*</code></td>
+<td>quel cliente, tutti i prodotti</td>
+</tr>
+<tr>
+<td><code>*</code></td>
+<td><code>materasso</code></td>
+<td><strong>tutta la famiglia</strong> materasso</td>
+</tr>
+<tr>
+<td><code>*</code></td>
+<td><code>Materasso Damiano</code></td>
+<td>solo quel prodotto</td>
+</tr>
+</tbody>
+</table>
+<p>⚠ Il filtro per <strong>famiglia</strong> funziona solo se i prodotti la dichiarano nella
+colonna <code>famiglia</code> di CARATTERISTICHE.</p>
+<p><strong>Precedenza:</strong> cliente batte azienda — la riga più specifica vince.
+<strong>Eccezione assoluta:</strong> le guardie di prodotto non si scavalcano mai.</p>
+<h2 id="45-il-quadro-regole">4.5 Il quadro regole</h2>
+<p>Nel prodotto, con <code>R ⚿</code> aperto. Per ogni regola dice:</p>
+<table>
+<thead>
+<tr>
+<th>stato</th>
+<th>significa</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><strong>attiva</strong> (ambra)</td>
+<td>è scattata, con l'effetto accanto</td>
+</tr>
+<tr>
+<td><strong>ferma / non violata</strong></td>
+<td>condizione non verificata — è normale per una guardia</td>
+</tr>
+<tr>
+<td><strong>annullata</strong> (barrata)</td>
+<td>un'altra regola l'ha sovrascritta</td>
+</tr>
+<tr>
+<td><strong>NON VALUTABILE</strong> (rossa)</td>
+<td>nomina un campo che non esiste: <strong>non scatterà mai</strong></td>
+</tr>
+</tbody>
+</table>
+<p>E la <strong>bandiera</strong> dice da dove viene: <code>—</code> prodotto · <code>✱</code> azienda · <code>nome cliente</code>.</p>
+<p>⚠ Sopra il quadro c'è il <strong>contesto</strong>: <code>cliente = … · ricarico … · listino …</code>.
+Se una regola non scatta e non capisci perché, la risposta è quasi sempre lì.</p>
+<p>⚠ <strong>Le regole si modificano sul posto</strong>: matita ✎ su ogni riga. Quelle
+d'anagrafica hanno la matita tratteggiata ⌂ e si correggono in Anagrafica.</p>
+<hr />
+<h1 id="5-le-anagrafiche">5 · LE ANAGRAFICHE</h1>
+<p>Dieci tabelle. Si riempiono a mano (<code>＋ aggiungi riga</code>, salva automatico) o da CSV.</p>
+<table>
+<thead>
+<tr>
+<th>tabella</th>
+<th>serve a</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><strong>CLIENTI</strong></td>
+<td>offerta, ERP, <strong>e le sue colonne diventano parole per le regole</strong></td>
+</tr>
+<tr>
+<td><strong>MATERIALI</strong></td>
+<td>densità, natura, costo al kg o al pezzo, scarto</td>
+</tr>
+<tr>
+<td><strong>BLOCCHI</strong></td>
+<td>formato del cubotto per materiale</td>
+</tr>
+<tr>
+<td><strong>COSTI</strong></td>
+<td>costo blocco e resa in lamine (via storica)</td>
+</tr>
+<tr>
+<td><strong>FORNITORI</strong></td>
+<td>il cliente impone il fornitore</td>
+</tr>
+<tr>
+<td><strong>LISTINI</strong></td>
+<td>ricarico e provvigione per cliente</td>
+</tr>
+<tr>
+<td><strong>REGOLE</strong></td>
+<td>accordi e condizioni</td>
+</tr>
+<tr>
+<td><strong>CARATTERISTICHE</strong></td>
+<td>cosa dichiara ogni prodotto — serve all'intervista</td>
+</tr>
+<tr>
+<td><strong>COMPOSIZIONE</strong></td>
+<td>da una risposta alla stratigrafia</td>
+</tr>
+<tr>
+<td><strong>INTERVISTA</strong></td>
+<td>le domande</td>
+</tr>
+</tbody>
+</table>
+<h2 id="51-la-regola-dellasterisco">5.1 La regola dell'asterisco</h2>
+<p><code>*</code> vale per tutti. La riga più specifica vince. Vale su ogni colonna filtro.</p>
+<h2 id="52-le-colonne-in-piu-non-si-buttano">5.2 Le colonne in più non si buttano</h2>
+<p>Se aggiungi <code>paese</code> al CSV clienti, quella colonna <strong>diventa una parola scrivibile
+in una regola</strong> la sera stessa. È il meccanismo che rende il sistema estensibile
+senza programmatore.</p>
+<h2 id="53-importare-un-csv">5.3 Importare un CSV</h2>
+<p>⚠ <strong>Ogni file nel suo riquadro.</strong> Se sbagli, il sistema rifiuta e dice quale
+colonna manca — leggi il messaggio prima di chiuderlo.</p>
+<p>⚠ <strong>L'importazione sostituisce</strong>, non somma.</p>
+<p>⚠ <strong>Serve l'intestazione</strong> come prima riga.</p>
+<p>⚠ Dopo l'importazione <strong>controlla il numero di righe</strong> accanto al titolo. Se non
+è quello atteso, il file non è entrato.</p>
+<h2 id="54-il-pannello-da-dichiarare">5.4 Il pannello DA DICHIARARE</h2>
+<p>Ambra, nel prodotto. Elenca cosa il prodotto nomina e l'anagrafica non conosce —
+con la domanda da girare a chi la sa.</p>
+<p>⚠ <em>"Finché restano aperte, il costo di queste voci è zero — e uno zero non si
+vede."</em> È la frase più importante del sistema.</p>
+<hr />
+<h1 id="6-i-prodotti">6 · I PRODOTTI</h1>
+<h2 id="61-officina">6.1 Officina</h2>
+<p><strong>modifica in Officina</strong> su un prodotto. Da lì:</p>
+<ul>
+<li><strong>Campi</strong> — cosa il prodotto dichiara. Con <code>min</code>/<code>max</code> o con valori a scelta.</li>
+<li><strong>＋ lista FORI</strong> — fori passanti, posizione dal centro in mm</li>
+<li><strong>＋ ZONE di lavorazione</strong> — zonizzazione lungo la lunghezza</li>
+<li><strong>Grammatica del codice</strong> — come nasce il codice articolo</li>
+<li><strong>Regole</strong> — le guardie del prodotto</li>
+</ul>
+<h2 id="62-le-zone-la-doppia-natura">6.2 Le zone — la doppia natura</h2>
+<table>
+<thead>
+<tr>
+<th>campo</th>
+<th>natura</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>da %</code> <code>a %</code></td>
+<td><strong>scala</strong> con la lunghezza — la zona segue il corpo</td>
+</tr>
+<tr>
+<td><code>lx</code> <code>ly</code> in mm</td>
+<td><strong>NON scala</strong> — la misura la decide l'attrezzatura</td>
+</tr>
+<tr>
+<td><code>mat</code> + <code>resa</code></td>
+<td>se dichiarati, la zona genera righe di distinta</td>
+</tr>
+<tr>
+<td><code>min</code> + <code>reparto</code></td>
+<td>se dichiarati, la zona genera minuti di ciclo</td>
+</tr>
+</tbody>
+</table>
+<p>⚠ Se il materiale è vuoto la zona è <strong>solo lavorazione</strong>: non genera componenti.</p>
+<h2 id="63-le-varianti-di-cliente">6.3 Le varianti di cliente</h2>
+<p>Quando modifichi un prodotto uscendo dalla sua famiglia, compare la proposta di
+farne un modello nuovo. Il nome è già proposto — prodotto + cliente.</p>
+<p>⚠ La variante <strong>non crea una libreria</strong>: marca la riga. Altrimenti ogni cliente
+genererebbe un mondo nuovo in barra.</p>
+<p>⚠ Nasce <strong>da approvare</strong>, non confermata.</p>
+<h2 id="64-il-riconoscimento">6.4 Il riconoscimento</h2>
+<p><code>GIÀ FATTO — IDENTICO</code> o <code>MAI FATTO — PRIMA VOLTA</code>, con le offerte precedenti.</p>
+<p>Il pulsante <strong>riparti</strong> prende <strong>solo la configurazione</strong>, lasciando il cliente e
+l'ordine di adesso. Le regole del cliente corrente si riapplicano da sole.</p>
+<p>⚠ Cliccare la <strong>riga</strong> invece riapre l'ordine intero, cliente compreso.</p>
+<hr />
+<h2 id="65-la-composizione-e-lunita-di-misura">6.5 La composizione e l'unità di misura</h2>
+<p>Le righe di <strong>COMPOSIZIONE</strong> scrivono gli spessori degli strati. Ma l'unità la
+decide <strong>il prodotto</strong>, non la riga:</p>
+<table>
+<thead>
+<tr>
+<th>prodotto</th>
+<th>misure in</th>
+<th>esempio</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Materasso</td>
+<td><strong>centimetri</strong></td>
+<td><code>HR35:5</code> = 5 cm</td>
+</tr>
+<tr>
+<td>Materasso Damiano</td>
+<td><strong>millimetri</strong></td>
+<td><code>HR35VERDE:40</code> = 40 mm</td>
+</tr>
+</tbody>
+</table>
+<p>⚠ È l'errore più insidioso del sistema: scrivere <code>4</code> pensando ai centimetri su un
+prodotto in millimetri dà un materasso alto un dito, e il motore non protesta —
+fa quello che gli si dice.</p>
+<p>⚠ Il sistema <strong>avvisa</strong> quando la somma degli strati si allontana di oltre il 35%
+dallo spessore dichiarato, e suggerisce l'unità sbagliata. L'avviso compare fra i
+messaggi del prodotto.</p>
+<p><strong>Regola pratica:</strong> dopo aver scritto una riga di composizione, somma gli spessori
+e confrontali con il campo spessore del prodotto. Devono somigliarsi.</p>
+<h2 id="66-le-varianti-si-approvano">6.6 Le varianti si approvano</h2>
+<p>Una variante nasce <code>da approvare</code>. Non è un'etichetta: finché non è approvata
+<strong>l'ordine non si registra</strong>.</p>
+<p>⚠ <strong>L'offerta si può fare comunque.</strong> Quotare è lecito e serve: il commerciale deve
+capire se il cliente ci sta. Mandare in produzione un prodotto che nessuno ha
+approvato, no.</p>
+<p><strong>Come si chiede</strong> — pulsante <code>chiedi approvazione</code> accanto alla pastiglia viola.
+La richiesta va sul server, non in una mail: una mail resta nella casella di chi
+la legge e il sistema non ne sa niente.</p>
+<p><strong>Come si risponde</strong> — chi approva vede in barra <code>◈ 2 da approvare</code>. Apre, legge
+variante, prodotto d'origine, cliente e ordine, e preme <strong>approva</strong> o <strong>rifiuta</strong>.
+Il rifiuto chiede un motivo, che il commerciale vedrà.</p>
+<p><strong>La scadenza</strong> — la richiesta vale <strong>60 minuti</strong>. Se nessuno risponde, scade e
+diventa rossa: il commerciale lo sa e può dire al cliente «le confermo domani»
+invece di aspettare al buio. Una richiesta scaduta si può rifare.</p>
+<p>⚠ Lo stato si legge <strong>dal server</strong>: il commerciale vede la risposta comparire
+mentre è ancora seduto davanti al cliente, senza ricaricare.</p>
+<table>
+<thead>
+<tr>
+<th>stato</th>
+<th>pastiglia</th>
+<th>l'ordine si registra?</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>da approvare</td>
+<td>viola</td>
+<td>no</td>
+</tr>
+<tr>
+<td>in attesa…</td>
+<td>ambra</td>
+<td>no</td>
+</tr>
+<tr>
+<td>approvata</td>
+<td>petrolio</td>
+<td><strong>sì</strong></td>
+</tr>
+<tr>
+<td>rifiutata</td>
+<td>ambra scuro, col motivo</td>
+<td>no</td>
+</tr>
+<tr>
+<td>scaduta</td>
+<td>ambra scuro</td>
+<td>no — si richiede</td>
+</tr>
+</tbody>
+</table>
+<p>⚠ Il tempo di scadenza si cambia nel file: costante <code>APPROVA_MINUTI</code>.</p>
+<h1 id="7-mondi-e-ambiente-cliente">7 · MONDI E AMBIENTE CLIENTE</h1>
+<p><strong>manopola attivazione</strong> — accende e spegne i mondi visibili al cliente.</p>
+<p>⚠ L'attivazione è <strong>permanente</strong>: sopravvive al ricaricamento.
+⚠ Spegnere non cancella. Per cancellare serve un'azione diversa e <strong>non è
+reversibile</strong>.
+⚠ I <strong>clienti sono dell'azienda</strong>, non del mondo: spegnere un mondo non toglie i
+suoi clienti dagli altri.</p>
+<hr />
+<h1 id="8-quello-che-il-sistema-non-fa">8 · QUELLO CHE IL SISTEMA NON FA</h1>
+<h3 id="da-leggere-prima-di-prometterlo">Da leggere prima di prometterlo</h3>
+<table>
+<thead>
+<tr>
+<th>cosa</th>
+<th>stato</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Costo lavorazione con <strong>doppia tariffa</strong> macchina/uomo e operatori</td>
+<td><strong>non c'è</strong> — una tariffa sola per reparto</td>
+</tr>
+<tr>
+<td><strong>Provvigione</strong> — noi sul margine, gli ERP spesso sul prezzo finale</td>
+<td><strong>formula diversa</strong>, da allineare</td>
+</tr>
+<tr>
+<td><strong>Conflitti fra regole</strong> sullo stesso bersaglio</td>
+<td>vince l'ultima, <strong>in silenzio</strong></td>
+</tr>
+<tr>
+<td><strong>Livello ordine</strong>: quantità, lotto, trasporto, scaglioni</td>
+<td><strong>non c'è</strong> — le regole valutano la riga</td>
+</tr>
+<tr>
+<td><strong>Misure fuori catalogo</strong> dove il campo è una tendina</td>
+<td>non scrivibili</td>
+</tr>
+<tr>
+<td><strong>Divieti d'azienda</strong> per cliente o paese</td>
+<td>le regole d'azienda maggiorano, non vietano</td>
+</tr>
+<tr>
+<td><strong>Notifica</strong> a chi approva (mail, messaggio)</td>
+<td>non c'è — chi approva controlla la lista</td>
+</tr>
+<tr>
+<td>Tempo di lavorazione <strong>dichiarato per componente</strong> con la sua origine</td>
+<td>parziale</td>
+</tr>
+<tr>
+<td><strong>Zone nel 3D</strong>: disegnate ✔ · nella distinta ✔ · nei cicli ✔</td>
+<td>completo</td>
+</tr>
+<tr>
+<td><strong>Distinta a livelli</strong> (semilavorati con codice proprio)</td>
+<td>non c'è</td>
+</tr>
+<tr>
+<td><strong>Tolleranze</strong> sulle misure</td>
+<td>non c'è</td>
+</tr>
+<tr>
+<td><strong>Magazzino, giacenze, approvvigionamento</strong></td>
+<td><strong>fuori perimetro</strong> — è dell'ERP</td>
+</tr>
+</tbody>
+</table>
+<hr />
+<h1 id="9-i-dieci-errori-che-costano-piu-tempo">9 · I DIECI ERRORI CHE COSTANO PIÙ TEMPO</h1>
+<ol>
+<li><strong>Importare un CSV nel riquadro sbagliato</strong> — leggi il messaggio di rifiuto.</li>
+<li><strong>Non controllare il numero di righe</strong> dopo un'importazione.</li>
+<li><strong>CSV senza intestazione</strong> — viene rifiutato.</li>
+<li><strong>Scrivere una regola su un campo che non esiste</strong> — resta <code>NON VALUTABILE</code>.</li>
+<li><strong>Cercare una regola che non scatta</strong> senza guardare il contesto sopra il quadro.</li>
+<li><strong>Dimenticare la colonna <code>famiglia</code></strong> e poi stupirsi che il filtro non filtri.</li>
+<li><strong>Ricaricare la pagina</strong> aspettandosi il file nuovo senza <code>Ctrl+F5</code>.</li>
+<li><strong>Lasciare aperto DA DICHIARARE</strong> e fidarsi dei costi.</li>
+<li><strong>Confondere spegnere con cancellare</strong> un mondo.</li>
+<li><strong>Modificare un prodotto dopo l'intervista</strong> senza leggere gli scostamenti.</li>
+<li><strong>Scrivere una composizione nell'unità sbagliata</strong> — centimetri su un
+    prodotto in millimetri, o viceversa.</li>
+<li><strong>Chiedere l'approvazione e non avvisare nessuno</strong> — il sistema non manda
+    notifiche: chi approva deve guardare la lista.</li>
+</ol>
+<hr />
+<h1 id="10-il-collegamento-con-il-manuale-operativo">10 · IL COLLEGAMENTO CON IL MANUALE OPERATIVO</h1>
+<p>Questo manuale spiega <strong>come si usa</strong>. Il manuale operativo dovrà spiegare
+<strong>chi fa cosa, e quando</strong>. I punti in cui i due si toccano:</p>
+<p><strong>Chi tiene la password delle regole.</strong> Un solo responsabile. Se gira fra dieci
+persone, il pulsante non separa più niente.</p>
+<p><strong>Chi approva le varianti.</strong> La meccanica c'è: richiesta, scadenza a 60 minuti,
+approva/rifiuta con motivo. Manca <strong>la persona</strong>: chi controlla la lista, e ogni
+quanto. Senza qualcuno che guarda, le richieste scadono e basta.</p>
+<p><strong>Chi mantiene l'intervista.</strong> Le domande invecchiano. Senza revisione periodica
+diventano un modulo da compilare in fretta scegliendo sempre la prima opzione.</p>
+<p><strong>Chi svuota DA DICHIARARE.</strong> Ogni voce è una domanda a qualcuno. Se non ha un
+destinatario, resta lì e i costi restano a zero.</p>
+<p><strong>Chi decide quando un prodotto nuovo entra a catalogo.</strong> Le varianti si
+accumulano: a un certo punto una di esse è un prodotto, e va promossa.</p>
+<p><strong>Cosa si dice al cliente sui limiti.</strong> La sezione 8 non è un documento interno:
+è la base di quello che si promette e di quello che non si promette.</p>
+</div></body></html>
