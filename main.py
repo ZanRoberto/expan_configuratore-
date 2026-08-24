@@ -274,11 +274,54 @@ def leggi_offerta(numero: str):
             "creata_da": row[4], "congelato": congelato, "payload": payload}
 
 @app.get("/api/anagrafica")
-def leggi_anagrafica(azienda: str = "default"):
+def leggi_anagrafica(azienda: str = "default", tipi: str = None, indice: int = 0):
     """Le tabelle dell'azienda (fornitori, costi, listini...). Nessun dato e' nel motore:
-    se l'azienda non ha ancora caricato niente, torna vuoto."""
+    se l'azienda non ha ancora caricato niente, torna vuoto.
+
+    (24ago2026) PRIMA questa funzione leggeva SEMPRE tutte le righe, sempre.
+    Con 'mondi' a 8,8 MB ogni singola chiamata leggeva dal disco, deserializzava
+    in memoria e rispediva quasi 9 MB anche a chi voleva tre materiali da 200 byte.
+    Doppio costo: banda e CPU (json.loads + riserializzazione), a ogni richiesta.
+    Ora si puo' chiedere solo cio' che serve:
+
+      /api/anagrafica                        -> TUTTO (come prima, invariato)
+      /api/anagrafica?tipi=materiali,blocchi -> solo quelle due tabelle
+      /api/anagrafica?indice=1               -> l'elenco delle tabelle con peso e
+                                                data, SENZA i dati dentro
+
+    Il comportamento senza parametri e' identico a prima: il configuratore
+    esistente non si accorge di niente. Chi ha bisogno di poco, chiede poco."""
     con = get_con()
-    rows = con.execute("SELECT tipo,dati_json FROM anagrafica WHERE azienda_id=?;", (azienda,)).fetchall()
+
+    # MODO INDICE: dice quali tabelle ci sono e quanto pesano, senza aprirle.
+    # Serve al menu di sinistra della console: prima doveva scaricare 8,8 MB
+    # solo per sapere che esistono quattordici tabelle.
+    if indice:
+        rows = con.execute(
+            "SELECT tipo, length(dati_json), aggiornato FROM anagrafica WHERE azienda_id=? ORDER BY tipo;",
+            (azienda,)).fetchall()
+        con.close()
+        return {"azienda": azienda,
+                "tabelle": [{"tipo": r[0], "byte": r[1], "aggiornato": r[2]} for r in rows]}
+
+    # MODO SELETTIVO: solo le tabelle chieste. I nomi non entrano mai nella query
+    # come testo, solo come parametri: si costruiscono i segnaposto, non i valori.
+    # ATTENZIONE alla differenza fra "tipi assente" e "tipi presente ma vuoto":
+    # se il frontend costruisce male l'URL e manda ?tipi= , NON deve ricevere
+    # tutto per sbaglio (sarebbero 8,8 MB non voluti). Assente = tutto (vecchio
+    # comportamento). Presente = solo cio' che e' elencato, anche se e' niente.
+    if tipi is None:
+        rows = con.execute("SELECT tipo,dati_json FROM anagrafica WHERE azienda_id=?;",
+                           (azienda,)).fetchall()
+    else:
+        lista = [t.strip() for t in tipi.split(",") if t.strip()]
+        if not lista:
+            con.close()
+            return {}
+        segnaposto = ",".join("?" * len(lista))
+        rows = con.execute(
+            "SELECT tipo,dati_json FROM anagrafica WHERE azienda_id=? AND tipo IN (%s);" % segnaposto,
+            (azienda, *lista)).fetchall()
     con.close()
     return {t: json.loads(d) for (t, d) in rows}
 
