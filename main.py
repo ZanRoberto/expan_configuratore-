@@ -31,7 +31,7 @@ HTML_FILE = os.environ.get("HTML_FILE", "configuratore_expan_v2.html")
 # (21ago2026) Ogni cliente ha la SUA istanza con la SUA copia del programma.
 # Senza un numero di versione dichiarato non c'e' modo di sapere chi e' rimasto
 # indietro dopo un aggiornamento del motore: si scopre dai difetti, troppo tardi.
-VERSIONE = "2026.08.21"
+VERSIONE = "2026.08.25"
 
 def diagnosi_disco():
     """Dice la verita' su DOVE stiamo scrivendo.
@@ -318,9 +318,21 @@ def leggi_anagrafica(azienda: str = "default", tipi: str = None, indice: int = 0
     # Serve al menu di sinistra della console: prima doveva scaricare 8,8 MB
     # solo per sapere che esistono quattordici tabelle.
     if indice:
-        rows = con.execute(
-            "SELECT tipo, length(dati_json), aggiornato FROM anagrafica WHERE azienda_id=? ORDER BY tipo;",
-            (azienda,)).fetchall()
+        # Il numero di righe si puo' chiedere a SQLite senza aprire il blob in
+        # Python: json_array_length legge la struttura, non la porta in memoria.
+        # Su 'mondi' e' la differenza fra contare e caricare 8,4 MB.
+        # Se la libreria non avesse il modulo JSON (build minimali), si ripiega
+        # sul solo peso: il menu perde i conteggi, non smette di funzionare.
+        try:
+            rows = con.execute(
+                """SELECT tipo, length(dati_json), aggiornato,
+                          CASE WHEN json_valid(dati_json) AND json_type(dati_json)='array'
+                               THEN json_array_length(dati_json) ELSE NULL END
+                   FROM anagrafica WHERE azienda_id=? ORDER BY tipo;""", (azienda,)).fetchall()
+        except Exception:
+            rows = [(r[0], r[1], r[2], None) for r in con.execute(
+                "SELECT tipo, length(dati_json), aggiornato FROM anagrafica WHERE azienda_id=? ORDER BY tipo;",
+                (azienda,)).fetchall()]
         con.close()
         def gruppo(t):
             # la divisione la decide il server, non l'interfaccia: una regola che
@@ -330,7 +342,7 @@ def leggi_anagrafica(azienda: str = "default", tipi: str = None, indice: int = 0
             return "motore"
         return {"azienda": azienda,
                 "tabelle": [{"tipo": r[0], "byte": r[1], "aggiornato": r[2],
-                             "gruppo": gruppo(r[0])} for r in rows]}
+                             "righe": r[3], "gruppo": gruppo(r[0])} for r in rows]}
 
     # MODO SELETTIVO: solo le tabelle chieste. I nomi non entrano mai nella query
     # come testo, solo come parametri: si costruiscono i segnaposto, non i valori.
