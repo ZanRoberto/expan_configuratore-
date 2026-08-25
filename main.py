@@ -973,11 +973,55 @@ def pagina_dati():
         "<h1>Dati azienda</h1><p>Manca il file <code>%s</code> nel progetto.</p>" % DATI_FILE,
         status_code=404)
 
+# (25ago2026) UN SOLO INDIRIZZO DA RICORDARE.
+# Il configuratore e la console sono due pagine, ma chi lavora deve aprirne una
+# sola e muoversi da dentro. Il ritorno esiste gia' nella console; qui si mette
+# l'andata, senza toccare il file del configuratore: si aggiunge un collegamento
+# prima della chiusura della pagina, al volo.
+#
+# E' un PONTE, non la soluzione definitiva: il posto giusto per questo link e' il
+# bottone 'anagrafica' che il configuratore ha gia' nella sua barra. Quando quel
+# bottone puntera' a /dati, questa iniezione va tolta — si riconosce dal marchio
+# qui sotto e non lascia tracce altrove.
+MARCHIO_PONTE = "matrice-ponte-dati"
+PONTE_HTML = """
+<a id="%s" href="/dati" title="i dati dell'azienda"
+   style="position:fixed;right:16px;bottom:16px;z-index:99999;
+          font:12px ui-monospace,Menlo,Consolas,monospace;text-decoration:none;
+          background:#0f4d3f;color:#fff;padding:9px 14px;border-radius:3px;
+          box-shadow:0 3px 12px rgba(0,0,0,.22)">dati dell'azienda →</a>
+</body>""" % MARCHIO_PONTE
+
+_cache_home = {"quando": None, "html": None}
+
+def _pagina_configuratore():
+    """Legge il configuratore UNA volta e lo tiene in memoria finche' il file non
+    cambia. Il file e' grosso (circa mezzo megabyte): rileggerlo dal disco a ogni
+    visita e' lavoro inutile. Se lo sostituisci con un deploy, la data cambia e
+    viene riletto da solo."""
+    try:
+        quando = os.path.getmtime(HTML_FILE)
+    except OSError:
+        return None
+    if _cache_home["quando"] != quando:
+        with open(HTML_FILE, encoding="utf-8", errors="replace") as f:
+            html = f.read()
+        if MARCHIO_PONTE not in html:
+            # SULL'ULTIMA chiusura, non sulla prima: un </body> puo' comparire
+            # dentro una stringa JavaScript, e infilare il link li' spezzerebbe
+            # la pagina. Verificato con un configuratore che ne contiene uno.
+            testa, sep, coda = html.rpartition("</body>")
+            if sep:
+                html = testa + PONTE_HTML + coda
+        _cache_home["quando"], _cache_home["html"] = quando, html
+    return _cache_home["html"]
+
 @app.get("/", response_class=HTMLResponse)
 def home():
-    if os.path.exists(HTML_FILE):
-        return FileResponse(HTML_FILE)
-    return HTMLResponse("<h1>EXPAN Configuratore</h1><p>Back-end attivo. Carica il file HTML nel repo.</p>")
+    html = _pagina_configuratore()
+    if html is None:
+        return HTMLResponse("<h1>EXPAN Configuratore</h1><p>Back-end attivo. Carica il file HTML nel repo.</p>")
+    return HTMLResponse(html)
 
 # ══════════════════ AVVIO (funziona anche con 'python main.py') ══════════════════
 if __name__ == "__main__":
