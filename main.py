@@ -148,6 +148,27 @@ def init_db():
     );
     CREATE INDEX IF NOT EXISTS idx_firme_firma   ON firme(firma);
     CREATE INDEX IF NOT EXISTS idx_firme_cliente ON firme(cliente_cod);
+    -- (24ago2026) STORICO DELLE MODIFICHE ai dati dell'azienda.
+    -- Serve a due cose diverse con la stessa riga:
+    --  1) chi ha cambiato cosa e quando (quando la penna passa al cliente,
+    --     "il costo e' cambiato e nessuno sa perche'" non deve piu' accadere)
+    --  2) la coda verso l'ERP: 'da mandare' = le righe con inviato_erp=0.
+    --     Senza questa tabella non c'e' modo di sapere QUALI righe sono
+    --     cambiate, perche' il blob dice solo che e' diverso, non dove.
+    CREATE TABLE IF NOT EXISTS storico_dati(
+        id          INTEGER PRIMARY KEY AUTOINCREMENT,
+        azienda_id  TEXT NOT NULL,
+        tipo        TEXT NOT NULL,           -- materiali | blocchi | ...
+        quando      TEXT NOT NULL,
+        autore      TEXT,
+        azione      TEXT NOT NULL,           -- modifica | aggiunta | rimozione
+        etichetta   TEXT,                    -- come si chiama la riga toccata
+        prima_json  TEXT,
+        dopo_json   TEXT,
+        inviato_erp INTEGER NOT NULL DEFAULT 0
+    );
+    CREATE INDEX IF NOT EXISTS idx_storico_coda
+        ON storico_dati(azienda_id, inviato_erp);
     """)
     con.commit(); con.close()
 
@@ -301,8 +322,15 @@ def leggi_anagrafica(azienda: str = "default", tipi: str = None, indice: int = 0
             "SELECT tipo, length(dati_json), aggiornato FROM anagrafica WHERE azienda_id=? ORDER BY tipo;",
             (azienda,)).fetchall()
         con.close()
+        def gruppo(t):
+            # la divisione la decide il server, non l'interfaccia: una regola che
+            # vive solo nel browser non e' una regola
+            if t in TABELLE_NOSTRE: return "nostre"
+            if t in TABELLE_ERP:    return "erp"
+            return "motore"
         return {"azienda": azienda,
-                "tabelle": [{"tipo": r[0], "byte": r[1], "aggiornato": r[2]} for r in rows]}
+                "tabelle": [{"tipo": r[0], "byte": r[1], "aggiornato": r[2],
+                             "gruppo": gruppo(r[0])} for r in rows]}
 
     # MODO SELETTIVO: solo le tabelle chieste. I nomi non entrano mai nella query
     # come testo, solo come parametri: si costruiscono i segnaposto, non i valori.
@@ -345,6 +373,230 @@ def cancella_anagrafica(tipo: str, azienda: str = "default"):
     con.execute("DELETE FROM anagrafica WHERE azienda_id=? AND tipo=?;", (azienda, tipo))
     con.commit(); con.close()
     return {"tipo": tipo, "azienda": azienda, "cancellata": True}
+
+# ══════════════════ MANUTENZIONE DEI DATI (riga per riga) ══════════════════
+# (24ago2026) Fin qui l'unico modo di scrivere era POST /api/anagrafica/{tipo},
+# che SOSTITUISCE la tabella intera. Nato per l'import iniziale, fatto da una
+# persona sola, una volta. Nel momento in cui la penna passa all'ufficio tecnico
+# del cliente quel gesto diventa pericoloso: due persone che salvano nella stessa
+# mezz'ora si cancellano il lavoro a vicenda, in silenzio, senza errore.
+#
+# Qui sotto la scrittura e' PER RIGA e protetta: chi salva dichiara com'era la
+# tabella quando l'ha aperta ('atteso'). Se nel frattempo qualcun altro ha
+# salvato, la richiesta viene RIFIUTATA con 409 invece di sovrascrivere.
+# Meglio un messaggio "ricarica, e' cambiato" che una modifica sparita.
+#
+# NOTA ONESTA: i dati restano un blob JSON. Questo non e' la normalizzazione in
+# righe vere (quella arrivera' con cod_erp e id stabili): e' il minimo che rende
+# la penna consegnabile senza perdere dati. Il blob viene riscritto per intero
+# a ogni salvataggio, ma solo dopo aver verificato che nessuno sia arrivato prima.
+
+# Quali tabelle sono NOSTRE (si scrivono) e quali arrivano dall'ERP (sola lettura).
+# La console mostra questa divisione; qui e' il server a farla rispettare, perche'
+# una regola che vive solo nell'interfaccia non e' una regola.
+TABELLE_NOSTRE = ("materiali", "blocchi", "costi", "lavorazioni",
+                  "composizione", "caratteristiche", "regole", "intervista")
+TABELLE_ERP    = ("clienti", "fornitori", "listini")
+
+def risolvi_azienda(param: str = "default") -> str:
+    """UNICO punto in cui si decide di quale azienda stiamo parlando.
+
+    Oggi restituisce il parametro cosi' com'e': c'e' un cliente solo e la porta
+    e' quella di sempre. Domani, col registro distributori, l'azienda si ricavera'
+    da CHI E' ENTRATO e non da cosa c'e' scritto nell'indirizzo — e cambiera'
+    solo questa funzione, non i venti endpoint che la chiamano.
+    Finche' resta cosi', l'azienda nell'URL NON e' una misura di sicurezza."""
+    return (param or "default").strip() or "default"
+
+def _leggi_tabella(con, azienda, tipo):
+    """Torna (righe, aggiornato). Tabella inesistente = lista vuota, non errore:
+    una tabella mai riempita e' una tabella vuota, non un guasto."""
+    row = con.execute("SELECT dati_json, aggiornato FROM anagrafica WHERE azienda_id=? AND tipo=?;",
+                      (azienda, tipo)).fetchone()
+    if not row:
+        return [], None
+    dati = json.loads(row[0])
+    return (dati if isinstance(dati, list) else []), row[1]
+
+def _etichetta(riga):
+    """Come si chiama una riga, per lo storico. Non conosco lo schema delle
+    tabelle del cliente, quindi uso il primo campo testuale che trovo: nelle
+    anagrafiche il codice sta quasi sempre in testa."""
+    if not isinstance(riga, dict):
+        return str(riga)[:60]
+    for v in riga.values():
+        if isinstance(v, str) and v.strip():
+            return v.strip()[:60]
+    return "(riga senza nome)"
+
+def _salva_tabella(con, azienda, tipo, righe, autore, azione, etichetta, prima, dopo):
+    adesso = datetime.datetime.now().isoformat(timespec="seconds")
+    con.execute("""INSERT INTO anagrafica(azienda_id,tipo,dati_json,aggiornato) VALUES(?,?,?,?)
+                   ON CONFLICT(azienda_id,tipo) DO UPDATE SET
+                     dati_json=excluded.dati_json, aggiornato=excluded.aggiornato;""",
+                (azienda, tipo, json.dumps(righe, ensure_ascii=False), adesso))
+    con.execute("""INSERT INTO storico_dati(azienda_id,tipo,quando,autore,azione,etichetta,prima_json,dopo_json)
+                   VALUES(?,?,?,?,?,?,?,?);""",
+                (azienda, tipo, adesso, autore or "sconosciuto", azione, etichetta,
+                 json.dumps(prima, ensure_ascii=False) if prima is not None else None,
+                 json.dumps(dopo, ensure_ascii=False) if dopo is not None else None))
+    return adesso
+
+@app.patch("/api/anagrafica/{tipo}/riga")
+def modifica_riga(tipo: str, body: dict = Body(...)):
+    """Cambia UNA riga. Body: {azienda, indice, riga, atteso, autore}
+    'atteso' = il valore di 'aggiornato' che avevi quando hai aperto la tabella."""
+    azienda = risolvi_azienda(body.get("azienda"))
+    if tipo not in TABELLE_NOSTRE:
+        raise HTTPException(403, "questa tabella arriva dall'ERP: si legge, non si scrive")
+    indice = body.get("indice")
+    nuova  = body.get("riga")
+    if not isinstance(indice, int) or not isinstance(nuova, dict):
+        raise HTTPException(400, "servono 'indice' (numero) e 'riga' (oggetto)")
+    con = get_con()
+    try:
+        con.execute("BEGIN IMMEDIATE;")
+        righe, aggiornato = _leggi_tabella(con, azienda, tipo)
+        atteso = body.get("atteso")
+        if atteso and aggiornato and atteso != aggiornato:
+            con.execute("ROLLBACK;")
+            raise HTTPException(409, "qualcun altro ha salvato mentre lavoravi: ricarica la tabella")
+        if indice < 0 or indice >= len(righe):
+            con.execute("ROLLBACK;")
+            raise HTTPException(404, "riga non trovata")
+        prima = righe[indice]
+        righe[indice] = nuova
+        adesso = _salva_tabella(con, azienda, tipo, righe, body.get("autore"),
+                                "modifica", _etichetta(nuova), prima, nuova)
+        con.execute("COMMIT;")
+    except HTTPException:
+        con.close(); raise
+    except Exception as e:
+        try: con.execute("ROLLBACK;")
+        except Exception: pass
+        con.close(); raise HTTPException(500, "non sono riuscito a salvare: %s" % e)
+    con.close()
+    return {"tipo": tipo, "indice": indice, "aggiornato": adesso, "righe": len(righe)}
+
+@app.post("/api/anagrafica/{tipo}/riga")
+def aggiungi_riga(tipo: str, body: dict = Body(...)):
+    """Aggiunge una riga in fondo. Body: {azienda, riga, atteso, autore}"""
+    azienda = risolvi_azienda(body.get("azienda"))
+    if tipo not in TABELLE_NOSTRE:
+        raise HTTPException(403, "questa tabella arriva dall'ERP: si legge, non si scrive")
+    nuova = body.get("riga")
+    if not isinstance(nuova, dict):
+        raise HTTPException(400, "serve 'riga' (oggetto)")
+    con = get_con()
+    try:
+        con.execute("BEGIN IMMEDIATE;")
+        righe, aggiornato = _leggi_tabella(con, azienda, tipo)
+        atteso = body.get("atteso")
+        if atteso and aggiornato and atteso != aggiornato:
+            con.execute("ROLLBACK;")
+            raise HTTPException(409, "qualcun altro ha salvato mentre lavoravi: ricarica la tabella")
+        righe.append(nuova)
+        adesso = _salva_tabella(con, azienda, tipo, righe, body.get("autore"),
+                                "aggiunta", _etichetta(nuova), None, nuova)
+        con.execute("COMMIT;")
+    except HTTPException:
+        con.close(); raise
+    except Exception as e:
+        try: con.execute("ROLLBACK;")
+        except Exception: pass
+        con.close(); raise HTTPException(500, "non sono riuscito a salvare: %s" % e)
+    con.close()
+    return {"tipo": tipo, "indice": len(righe) - 1, "aggiornato": adesso, "righe": len(righe)}
+
+@app.delete("/api/anagrafica/{tipo}/riga")
+def rimuovi_riga(tipo: str, indice: int, azienda: str = "default",
+                 atteso: str = None, autore: str = None):
+    """Toglie UNA riga. Lo storico conserva com'era: si puo' sempre dire cosa c'era."""
+    azienda = risolvi_azienda(azienda)
+    if tipo not in TABELLE_NOSTRE:
+        raise HTTPException(403, "questa tabella arriva dall'ERP: si legge, non si scrive")
+    con = get_con()
+    try:
+        con.execute("BEGIN IMMEDIATE;")
+        righe, aggiornato = _leggi_tabella(con, azienda, tipo)
+        if atteso and aggiornato and atteso != aggiornato:
+            con.execute("ROLLBACK;")
+            raise HTTPException(409, "qualcun altro ha salvato mentre lavoravi: ricarica la tabella")
+        if indice < 0 or indice >= len(righe):
+            con.execute("ROLLBACK;")
+            raise HTTPException(404, "riga non trovata")
+        prima = righe.pop(indice)
+        adesso = _salva_tabella(con, azienda, tipo, righe, autore,
+                                "rimozione", _etichetta(prima), prima, None)
+        con.execute("COMMIT;")
+    except HTTPException:
+        con.close(); raise
+    except Exception as e:
+        try: con.execute("ROLLBACK;")
+        except Exception: pass
+        con.close(); raise HTTPException(500, "non sono riuscito a salvare: %s" % e)
+    con.close()
+    return {"tipo": tipo, "rimossa": _etichetta(prima), "aggiornato": adesso, "righe": len(righe)}
+
+@app.get("/api/anagrafica/storico")
+def storico_dati(azienda: str = "default", tipo: str = None, quante: int = 50):
+    """Chi ha cambiato cosa, dal piu' recente."""
+    azienda = risolvi_azienda(azienda)
+    con = get_con()
+    q = "SELECT quando,autore,tipo,azione,etichetta,inviato_erp FROM storico_dati WHERE azienda_id=?"
+    args = [azienda]
+    if tipo:
+        q += " AND tipo=?"; args.append(tipo)
+    q += " ORDER BY id DESC LIMIT ?;"; args.append(max(1, min(quante, 500)))
+    rows = con.execute(q, args).fetchall(); con.close()
+    return [{"quando": r[0], "autore": r[1], "tipo": r[2], "azione": r[3],
+             "riga": r[4], "inviato_erp": bool(r[5])} for r in rows]
+
+# ══════════════════ CODA VERSO L'ERP ══════════════════
+@app.get("/api/erp/da_inviare")
+def erp_da_inviare(azienda: str = "default"):
+    """Quante modifiche aspettano di uscire, e quando e' stato l'ultimo invio.
+    E' il conteggio che la console mostra in fondo alla pagina."""
+    azienda = risolvi_azienda(azienda)
+    con = get_con()
+    n = con.execute("SELECT COUNT(*) FROM storico_dati WHERE azienda_id=? AND inviato_erp=0;",
+                    (azienda,)).fetchone()[0]
+    ultimo = con.execute("SELECT MAX(quando) FROM storico_dati WHERE azienda_id=? AND inviato_erp=1;",
+                         (azienda,)).fetchone()[0]
+    righe = con.execute("""SELECT quando,autore,tipo,azione,etichetta FROM storico_dati
+                           WHERE azienda_id=? AND inviato_erp=0 ORDER BY id;""", (azienda,)).fetchall()
+    con.close()
+    return {"da_inviare": n, "ultimo_invio": ultimo,
+            "modifiche": [{"quando": r[0], "autore": r[1], "tipo": r[2],
+                           "azione": r[3], "riga": r[4]} for r in righe]}
+
+@app.post("/api/erp/prepara")
+def erp_prepara(body: dict = Body(None)):
+    """Prepara il pacchetto per l'ERP. Body: {azienda, conferma}
+
+    Senza 'conferma' e' un'ANTEPRIMA: mostra cosa uscirebbe e non tocca niente.
+    Con 'conferma': true segna le modifiche come inviate.
+    Escono solo le tabelle nostre — costi d'acquisto e codici dell'ERP non
+    tornano indietro da qui: il flusso e' a senso unico, per costruzione."""
+    body = body or {}
+    azienda = risolvi_azienda(body.get("azienda"))
+    con = get_con()
+    righe = con.execute("""SELECT id,quando,autore,tipo,azione,etichetta,dopo_json
+                           FROM storico_dati WHERE azienda_id=? AND inviato_erp=0 ORDER BY id;""",
+                        (azienda,)).fetchall()
+    pacchetto = [{"quando": r[1], "autore": r[2], "tabella": r[3], "azione": r[4],
+                  "riga": r[5], "dati": json.loads(r[6]) if r[6] else None}
+                 for r in righe if r[3] in TABELLE_NOSTRE]
+    conferma = bool(body.get("conferma"))
+    if conferma and righe:
+        con.execute("UPDATE storico_dati SET inviato_erp=1 WHERE azienda_id=? AND inviato_erp=0;",
+                    (azienda,))
+        con.commit()
+    con.close()
+    return {"schema": "MATRICE-ANAGRAFICA-ERP", "versione": "1.0",
+            "azienda": azienda, "anteprima": not conferma,
+            "generato": datetime.datetime.now().isoformat(timespec="seconds"),
+            "conteggio": len(pacchetto), "modifiche": pacchetto}
 
 @app.get("/api/export")
 def export_erp(stato: str = "confermata", x_api_key: str = Header(None)):
@@ -695,6 +947,20 @@ async def ai_ask(request: Request):
     return {"ok": True, "text": json.dumps(definizione, ensure_ascii=False), **definizione}
 
 # ══════════════════ FRONT-END STATICO ══════════════════
+DATI_FILE = os.environ.get("DATI_FILE", "dati_azienda.html")
+
+@app.get("/dati", response_class=HTMLResponse)
+def pagina_dati():
+    """La console dei dati dell'azienda (livello zero del Matrice).
+    Vive accanto al configuratore, non dentro: due pagine, una sola API, un solo
+    database. Se un giorno questa va riscritta da zero, il configuratore non se
+    ne accorge — e viceversa."""
+    if os.path.exists(DATI_FILE):
+        return FileResponse(DATI_FILE)
+    return HTMLResponse(
+        "<h1>Dati azienda</h1><p>Manca il file <code>%s</code> nel progetto.</p>" % DATI_FILE,
+        status_code=404)
+
 @app.get("/", response_class=HTMLResponse)
 def home():
     if os.path.exists(HTML_FILE):
