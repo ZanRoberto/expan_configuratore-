@@ -169,7 +169,31 @@ def init_db():
     );
     CREATE INDEX IF NOT EXISTS idx_storico_coda
         ON storico_dati(azienda_id, inviato_erp);
+    -- (25ago2026) REGISTRO DEI RITIRI DELL'ERP.
+    -- L'ERP viene a prendersi le commesse da /api/export. Fin qui nessuno
+    -- segnava cosa aveva gia' preso: a ogni chiamata si riportava a casa TUTTE
+    -- le confermate. Se rilegge una commessa gia' lavorata e non se ne accorge,
+    -- fa due volte lo scarico di magazzino.
+    -- Qui si tiene il registro di ogni ritiro: quando, quante, quali.
+    CREATE TABLE IF NOT EXISTS ritiri_erp(
+        id      INTEGER PRIMARY KEY AUTOINCREMENT,
+        quando  TEXT NOT NULL,
+        quante  INTEGER NOT NULL,
+        numeri  TEXT,                        -- i numeri consegnati, separati da virgola
+        esito   TEXT NOT NULL DEFAULT 'preso' -- preso | confermato
+    );
     """)
+    # PRESO non e' INGOIATO. Segnare 'passata' appena l'ERP scarica sarebbe
+    # sbagliato: se poi va in errore mentre elabora, quella commessa risulta
+    # consegnata e non la ripesca piu' nessuno. Un ordine sparito in silenzio e'
+    # peggio di un ordine doppio. Quindi due tracce distinte:
+    #   preso_il / preso_volte -> l'ha scaricata (la lettura NON cambia lo stato)
+    #   passata_il             -> ha dichiarato di averla lavorata
+    esistenti = {r[1] for r in con.execute("PRAGMA table_info(offerte);")}
+    for colonna, tipo in (("preso_il", "TEXT"), ("preso_volte", "INTEGER NOT NULL DEFAULT 0"),
+                          ("passata_il", "TEXT")):
+        if colonna not in esistenti:
+            con.execute("ALTER TABLE offerte ADD COLUMN %s %s;" % (colonna, tipo))
     con.commit(); con.close()
 
 # ══════════════════ NUMERAZIONE ATOMICA (cuore già testato) ══════════════════
@@ -337,8 +361,9 @@ def leggi_anagrafica(azienda: str = "default", tipi: str = None, indice: int = 0
         def gruppo(t):
             # la divisione la decide il server, non l'interfaccia: una regola che
             # vive solo nel browser non e' una regola
-            if t in TABELLE_NOSTRE: return "nostre"
-            if t in TABELLE_ERP:    return "erp"
+            if t == "clienti_nuovi": return "erp"   # sta accanto ai clienti veri
+            if t in TABELLE_NOSTRE:  return "nostre"
+            if t in TABELLE_ERP:     return "erp"
             return "motore"
         return {"azienda": azienda,
                 "tabelle": [{"tipo": r[0], "byte": r[1], "aggiornato": r[2],
@@ -407,7 +432,8 @@ def cancella_anagrafica(tipo: str, azienda: str = "default"):
 # La console mostra questa divisione; qui e' il server a farla rispettare, perche'
 # una regola che vive solo nell'interfaccia non e' una regola.
 TABELLE_NOSTRE = ("materiali", "blocchi", "costi", "lavorazioni",
-                  "composizione", "caratteristiche", "regole", "intervista")
+                  "composizione", "caratteristiche", "regole", "intervista",
+                  "clienti_nuovi")
 TABELLE_ERP    = ("clienti", "fornitori", "listini")
 
 def risolvi_azienda(param: str = "default") -> str:
@@ -610,26 +636,357 @@ def erp_prepara(body: dict = Body(None)):
             "generato": datetime.datetime.now().isoformat(timespec="seconds"),
             "conteggio": len(pacchetto), "modifiche": pacchetto}
 
+# ══════════════════ CLIENTI NUOVI (provvisori) ══════════════════
+# (25ago2026) L'anagrafica clienti e' dell'ERP: se qui si creassero clienti
+# liberamente nascerebbero due registri che divergono, e l'ERP non se ne
+# accorgerebbe mai. Ma il commerciale che ha davanti un cliente nuovo non puo'
+# aspettare l'amministrazione: se lo blocchi, se lo scrive su un foglio.
+#
+# La via di mezzo e' uno stato dichiarato: PROVVISORIO. Nasce qui, senza codice
+# ERP, marcato come non ancora nel gestionale. Ci si fa un preventivo. Va in coda
+# come RICHIESTA all'ERP, non come fatto compiuto. Quando l'ERP restituisce il
+# suo codice, il provvisorio si riconcilia e la penna torna al gestionale.
+#
+# Vive in una tabella sua ('clienti_nuovi'), non dentro 'clienti': cosi' il
+# prossimo scarico dal gestionale non puo' cancellarlo, e nessuno puo' confondere
+# un cliente vero con uno che aspetta.
+
+# Lunghezze del numero di partita IVA per paese (senza il prefisso).
+# Solo controllo di FORMA: dice se e' scritto in modo plausibile, non se esiste.
+FORMATI_IVA = {"IT":(11,11),"DE":(9,9),"FR":(11,11),"ES":(9,9),"AT":(9,9),
+               "BE":(10,10),"NL":(12,12),"PT":(9,9),"PL":(10,10),"SE":(12,12),
+               "DK":(8,8),"FI":(8,8),"IE":(8,9),"GR":(9,9),"EL":(9,9),
+               "CZ":(8,10),"SK":(10,10),"HU":(8,8),"RO":(2,10),"SI":(8,8),
+               "HR":(11,11),"BG":(9,10),"LU":(8,8),"LT":(9,12),"LV":(11,11),
+               "EE":(9,9),"CY":(9,9),"MT":(8,8)}
+
+def _piva_italiana(cifre: str):
+    """Controlla la cifra di controllo della partita IVA italiana.
+    E' un calcolo, non una ricerca: non serve rete e non sbaglia. Non dice che
+    l'azienda esiste — dice che quel numero non e' stato battuto male."""
+    if len(cifre) != 11 or not cifre.isdigit():
+        return False, "una partita IVA italiana ha 11 cifre"
+    somma = 0
+    for i, c in enumerate(cifre[:10]):
+        n = int(c)
+        if i % 2:                       # 2a, 4a, 6a... si raddoppiano
+            n *= 2
+            if n > 9: n -= 9
+        somma += n
+    atteso = (10 - somma % 10) % 10
+    if atteso != int(cifre[10]):
+        return False, "cifra di controllo sbagliata: dovrebbe finire con %d" % atteso
+    return True, "ok"
+
+def controlla_piva(valore: str, paese: str = "IT"):
+    """Torna (valida, spiegazione, normalizzata). La spiegazione e' scritta per
+    chi la legge a video, non per un log."""
+    grezzo = "".join(str(valore or "").split()).upper().replace("-", "").replace(".", "")
+    if not grezzo:
+        return False, "manca la partita IVA", ""
+    pref = grezzo[:2]
+    if pref.isalpha() and pref in FORMATI_IVA:
+        codice, cifre = pref, grezzo[2:]
+    else:
+        codice, cifre = (paese or "IT").upper()[:2], grezzo
+    if codice == "IT":
+        ok, perche = _piva_italiana(cifre)
+        return ok, perche, ("IT" + cifre if ok else grezzo)
+    minimo, massimo = FORMATI_IVA.get(codice, (4, 14))
+    corpo = "".join(c for c in cifre if c.isalnum())
+    if not (minimo <= len(corpo) <= massimo):
+        return False, ("per %s servono %d caratteri dopo il prefisso" % (codice, minimo)
+                       if minimo == massimo else
+                       "per %s ne servono da %d a %d dopo il prefisso" % (codice, minimo, massimo)), grezzo
+    # Fuori dall'Italia si controlla solo la forma: la verifica vera e' VIES,
+    # che sta a Bruxelles e a volte non risponde. Non si blocca un preventivo
+    # perche' un servizio esterno e' giu'.
+    return True, "forma corretta (non verificata presso VIES)", codice + corpo
+
+def _confronta_nome(a, b):
+    """Due ragioni sociali sono 'la stessa' se restano uguali togliendo forma
+    societaria e punteggiatura. Serve a intercettare 'Rossi SpA' contro
+    'ROSSI S.p.A.', che per l'ERP sarebbero due clienti diversi."""
+    import re as _re
+    t = _re.sub(r"[^a-z0-9 ]", " ", str(a or "").lower())
+    t = _re.sub(r"\b(s\s?p\s?a|s\s?r\s?l|s\s?a\s?s|s\s?n\s?c|srls|gmbh|ltd|sa|bv|nv|spa)\b", " ", t)
+    t = " ".join(t.split())
+    u = _re.sub(r"[^a-z0-9 ]", " ", str(b or "").lower())
+    u = _re.sub(r"\b(s\s?p\s?a|s\s?r\s?l|s\s?a\s?s|s\s?n\s?c|srls|gmbh|ltd|sa|bv|nv|spa)\b", " ", u)
+    u = " ".join(u.split())
+    return bool(t) and t == u
+
+def _cerca_doppioni(con, azienda, piva, ragione):
+    """Il doppione e' il danno peggiore, non la partita IVA storta: stesso cliente
+    con due codici significa storico spezzato e statistiche false, e l'ERP non lo
+    scopre perche' per lui sono due clienti. Si cerca fra i clienti veri E fra
+    quelli gia' in attesa."""
+    solo = lambda s: "".join(c for c in str(s or "").upper() if c.isalnum())
+    trovati = []
+    for tabella, dove in (("clienti", "nel gestionale"), ("clienti_nuovi", "gia' in attesa")):
+        righe, _ = _leggi_tabella(con, azienda, tabella)
+        for r in righe:
+            if not isinstance(r, dict): continue
+            pv = next((v for k, v in r.items() if "iva" in k.lower() or "piva" in k.lower()), "")
+            rs = next((v for k, v in r.items() if "ragione" in k.lower() or "nome" in k.lower()
+                       or "denomin" in k.lower()), "")
+            if piva and pv and solo(pv) == solo(piva):
+                trovati.append({"dove": dove, "cliente": rs or "(senza nome)",
+                                "codice": r.get("codice") or r.get("cod") or "",
+                                "perche": "stessa partita IVA"})
+            elif ragione and rs and _confronta_nome(rs, ragione):
+                trovati.append({"dove": dove, "cliente": rs,
+                                "codice": r.get("codice") or r.get("cod") or "",
+                                "perche": "stessa ragione sociale"})
+    return trovati
+
+@app.post("/api/clienti/verifica")
+def verifica_cliente(body: dict = Body(...)):
+    """Controlla PRIMA di creare: partita IVA e doppioni. Non scrive niente.
+    Body: {azienda, piva, paese, ragione_sociale}"""
+    azienda = risolvi_azienda(body.get("azienda"))
+    valida, perche, normalizzata = controlla_piva(body.get("piva"), body.get("paese") or "IT")
+    con = get_con()
+    doppioni = _cerca_doppioni(con, azienda, body.get("piva"), body.get("ragione_sociale"))
+    con.close()
+    return {"piva": {"valida": valida, "spiegazione": perche, "normalizzata": normalizzata},
+            "doppioni": doppioni}
+
+@app.post("/api/clienti/nuovo")
+def nuovo_cliente(body: dict = Body(...)):
+    """Crea un cliente PROVVISORIO. Body: {azienda, cliente:{...}, autore, forza}
+
+    'forza' serve solo a passare sopra a un doppione segnalato: la decisione resta
+    a una persona, ma resta anche scritta nello storico."""
+    azienda = risolvi_azienda(body.get("azienda"))
+    c = body.get("cliente") or {}
+    ragione = (c.get("ragione_sociale") or "").strip()
+    if not ragione:
+        raise HTTPException(400, "serve la ragione sociale")
+    valida, perche, normalizzata = controlla_piva(c.get("piva"), c.get("paese") or "IT")
+    if not valida:
+        raise HTTPException(400, "partita IVA: %s" % perche)
+
+    con = get_con()
+    try:
+        con.execute("BEGIN IMMEDIATE;")
+        doppioni = _cerca_doppioni(con, azienda, c.get("piva"), ragione)
+        if doppioni and not body.get("forza"):
+            con.execute("ROLLBACK;"); con.close()
+            return JSONResponse(status_code=409,
+                content={"errore": "esiste gia'", "doppioni": doppioni,
+                         "come_procedere": "se sono davvero due aziende diverse, rimanda con forza=true"})
+        righe, aggiornato = _leggi_tabella(con, azienda, "clienti_nuovi")
+        # Codice provvisorio, riconoscibile a occhio: nessuno lo scambia per vero.
+        provvisorio = "NUOVO-%03d" % (len(righe) + 1)
+        riga = dict(c)
+        riga.update({"codice": provvisorio, "piva": normalizzata or c.get("piva"),
+                     "ragione_sociale": ragione, "stato": "in attesa dell'ERP",
+                     "cod_erp": "", "creato": datetime.datetime.now().isoformat(timespec="seconds"),
+                     "creato_da": body.get("autore") or "sconosciuto"})
+        if doppioni:
+            riga["nota"] = "creato nonostante una segnalazione di doppione"
+        righe.append(riga)
+        adesso = _salva_tabella(con, azienda, "clienti_nuovi", righe, body.get("autore"),
+                                "cliente nuovo", ragione, None, riga)
+        con.execute("COMMIT;")
+    except HTTPException:
+        con.close(); raise
+    except Exception as e:
+        try: con.execute("ROLLBACK;")
+        except Exception: pass
+        con.close(); raise HTTPException(500, "non sono riuscito a salvare: %s" % e)
+    con.close()
+    return {"codice": provvisorio, "stato": "in attesa dell'ERP",
+            "piva": riga["piva"], "aggiornato": adesso,
+            "avviso": "preventivi si', conferma d'ordine no: prima deve esistere nel gestionale"}
+
+@app.post("/api/clienti/riconcilia")
+def riconcilia_cliente(body: dict = Body(...)):
+    """L'ERP ha accolto il cliente e restituisce il suo codice.
+    Body: {azienda, codice (il provvisorio), cod_erp, autore}
+    Da qui in poi il cliente e' del gestionale: sparisce dai provvisori."""
+    azienda = risolvi_azienda(body.get("azienda"))
+    provvisorio, cod_erp = body.get("codice"), (body.get("cod_erp") or "").strip()
+    if not provvisorio or not cod_erp:
+        raise HTTPException(400, "servono 'codice' (il provvisorio) e 'cod_erp'")
+    con = get_con()
+    try:
+        con.execute("BEGIN IMMEDIATE;")
+        righe, _ = _leggi_tabella(con, azienda, "clienti_nuovi")
+        i = next((k for k, r in enumerate(righe)
+                  if isinstance(r, dict) and r.get("codice") == provvisorio), None)
+        if i is None:
+            con.execute("ROLLBACK;"); con.close()
+            raise HTTPException(404, "provvisorio non trovato: forse e' gia' stato riconciliato")
+        riga = righe.pop(i)
+        riga["cod_erp"] = cod_erp; riga["stato"] = "nel gestionale"
+        _salva_tabella(con, azienda, "clienti_nuovi", righe, body.get("autore"),
+                       "cliente riconciliato", riga.get("ragione_sociale", provvisorio), riga, None)
+        con.execute("COMMIT;")
+    except HTTPException:
+        con.close(); raise
+    except Exception as e:
+        try: con.execute("ROLLBACK;")
+        except Exception: pass
+        con.close(); raise HTTPException(500, "non sono riuscito a salvare: %s" % e)
+    con.close()
+    return {"codice": provvisorio, "cod_erp": cod_erp, "stato": "nel gestionale",
+            "restano_in_attesa": len(righe)}
+
+@app.get("/api/clienti/in_attesa")
+def clienti_in_attesa(azienda: str = "default"):
+    """I provvisori che aspettano il codice dal gestionale."""
+    azienda = risolvi_azienda(azienda)
+    con = get_con()
+    righe, _ = _leggi_tabella(con, azienda, "clienti_nuovi")
+    con.close()
+    return {"conteggio": len(righe), "clienti": righe}
+
 @app.get("/api/export")
-def export_erp(stato: str = "confermata", x_api_key: str = Header(None)):
+def export_erp(stato: str = "confermata", da: str = None, x_api_key: str = Header(None)):
     """
     ENDPOINT ERP: restituisce le offerte (default: confermate) con payload completo.
     Protetto da chiave (header X-API-Key). L'ERP viene qui a prendersi i dati.
+
+    (25ago2026) Ora ogni ritiro viene REGISTRATO, e ogni commessa porta con se'
+    quante volte e' gia' stata presa. Il conteggio non e' burocrazia: una commessa
+    presa cinque volte e mai confermata significa che l'ERP si sta rompendo su
+    quella, e lo si scopre da questa parte prima che lo scoprano loro.
+
+    La lettura NON cambia lo stato: se l'ERP riprova dopo un problema di rete,
+    ritrova tutto. Per togliere una commessa dal giro serve una dichiarazione
+    esplicita — /api/export/conferma.
+
+    'da' (facoltativo) limita a quelle non ancora prese o prese prima di una data.
+    Senza 'da' il comportamento e' identico a prima: chi chiama gia' oggi non
+    si accorge di niente.
     """
     if x_api_key != API_KEY:
         raise HTTPException(401, "chiave non valida")
     con = get_con()
-    rows = con.execute(
-        "SELECT numero,data,cliente_cod,stato,payload_json FROM offerte WHERE stato=? ORDER BY numero;",
-        (stato,)).fetchall()
-    con.close()
+    q = "SELECT numero,data,cliente_cod,stato,payload_json,preso_il,preso_volte FROM offerte WHERE stato=?"
+    args = [stato]
+    if da:
+        q += " AND (preso_il IS NULL OR preso_il < ?)"; args.append(da)
+    rows = con.execute(q + " ORDER BY numero;", args).fetchall()
+
     offerte = []
     for r in rows:
         payload = json.loads(r[4]) if r[4] else {}
-        offerte.append({"numero":r[0],"data":r[1],"cliente_cod":r[2],"stato":r[3],"offerta":payload})
-    return {"schema":"EXPAN-EXPORT-ERP","versione":"1.0",
-            "generato":datetime.datetime.now().isoformat(timespec="seconds"),
-            "conteggio":len(offerte),"offerte":offerte}
+        offerte.append({"numero": r[0], "data": r[1], "cliente_cod": r[2], "stato": r[3],
+                        "gia_preso_volte": r[6] or 0, "preso_l_ultima_volta": r[5],
+                        "offerta": payload})
+
+    adesso = datetime.datetime.now().isoformat(timespec="seconds")
+    # Il registro non deve poter far fallire la consegna: se il ritiro e' andato
+    # a buon fine, l'ERP ha i suoi dati anche se noi non riusciamo a scriverlo.
+    try:
+        numeri = [o["numero"] for o in offerte]
+        if numeri:
+            con.executemany(
+                "UPDATE offerte SET preso_il=?, preso_volte=COALESCE(preso_volte,0)+1 WHERE numero=?;",
+                [(adesso, n) for n in numeri])
+        if numeri:      # un ritiro a vuoto non e' un fatto: registrarlo
+            con.execute(  # riempirebbe il registro di righe che non dicono niente
+                "INSERT INTO ritiri_erp(quando,quante,numeri) VALUES(?,?,?);",
+                (adesso, len(numeri), ",".join(numeri)[:4000]))
+        con.commit()
+    except Exception:
+        pass
+    con.close()
+    return {"schema":"EXPAN-EXPORT-ERP","versione":"1.1",
+            "generato": adesso, "conteggio":len(offerte), "offerte":offerte,
+            "come_confermare":"POST /api/export/conferma con {\"numeri\":[...]} e la stessa chiave"}
+
+@app.post("/api/export/conferma")
+def export_conferma(body: dict = Body(...), x_api_key: str = Header(None)):
+    """L'ERP dichiara quali commesse ha davvero lavorato. Body: {numeri:[...]}
+    Solo qui una commessa passa a 'passata' e smette di uscire.
+    Chiamarlo due volte sullo stesso numero non fa danno: e' gia' passata."""
+    if x_api_key != API_KEY:
+        raise HTTPException(401, "chiave non valida")
+    numeri = body.get("numeri")
+    if not isinstance(numeri, list) or not numeri:
+        raise HTTPException(400, "serve 'numeri': [...]")
+    adesso = datetime.datetime.now().isoformat(timespec="seconds")
+    con = get_con()
+    fatte, ignote = [], []
+    for n in numeri:
+        c = con.execute("UPDATE offerte SET stato='passata', passata_il=? WHERE numero=? AND stato!='passata';",
+                        (adesso, n)).rowcount
+        if c: fatte.append(n)
+        else:
+            esiste = con.execute("SELECT 1 FROM offerte WHERE numero=?;", (n,)).fetchone()
+            (fatte if esiste else ignote).append(n)
+    con.execute("INSERT INTO ritiri_erp(quando,quante,numeri,esito) VALUES(?,?,?,'confermato');",
+                (adesso, len(fatte), ",".join(fatte)[:4000]))
+    con.commit(); con.close()
+    return {"confermate": len(fatte), "passate": fatte,
+            "numeri_sconosciuti": ignote, "quando": adesso}
+
+@app.post("/api/export/chiudi_a_mano")
+def export_chiudi_a_mano(body: dict = Body(...), x_api_key: str = Header(None)):
+    """RIPIEGO, per quando l'ERP sa solo venire a prendere e non puo' dichiarare
+    nulla (job schedulato che fa una GET e basta).
+
+    Chiude le commesse gia' ritirate da almeno 'ore' ore. Non e' una prova che
+    siano state lavorate: e' una fiducia dichiarata, con un nome sopra e una
+    riga nel registro. Meglio dichiararla che fingere di avere una conferma.
+    Body: {numeri:[...]} oppure {ore: 24, autore: "..."}"""
+    if x_api_key != API_KEY:
+        raise HTTPException(401, "chiave non valida")
+    adesso = datetime.datetime.now()
+    con = get_con()
+    if body.get("numeri"):
+        bersagli = [(n,) for n in body["numeri"]]
+        righe = [b[0] for b in bersagli]
+    else:
+        # 'or 24' qui sarebbe un difetto: ore=0 e' falso in Python e diventerebbe
+        # 24, cioe' l'opposto di quello che ha chiesto chi scrive 0. Il valore di
+        # riserva si applica solo se il campo manca davvero.
+        ore = body.get("ore")
+        ore = 24 if ore is None else int(ore)
+        limite = (adesso - datetime.timedelta(hours=ore)).isoformat(timespec="seconds")
+        righe = [r[0] for r in con.execute(
+            "SELECT numero FROM offerte WHERE stato='confermata' AND preso_il IS NOT NULL AND preso_il <= ?;",
+            (limite,)).fetchall()]
+    quando = adesso.isoformat(timespec="seconds")
+    for n in righe:
+        con.execute("UPDATE offerte SET stato='passata', passata_il=? WHERE numero=? AND stato='confermata';",
+                    (quando, n))
+    con.execute("INSERT INTO ritiri_erp(quando,quante,numeri,esito) VALUES(?,?,?,?);",
+                (quando, len(righe), ",".join(righe)[:4000],
+                 "chiuso a mano da %s" % (body.get("autore") or "sconosciuto")))
+    con.commit(); con.close()
+    return {"chiuse": len(righe), "numeri": righe, "quando": quando,
+            "avvertenza": "chiuse per fiducia, non per conferma dell'ERP"}
+
+@app.get("/api/export/stato")
+def export_stato(x_api_key: str = Header(None)):
+    """A che punto e' il passaggio verso l'ERP. Serve a noi, non a loro.
+
+    'mai_confermate' e' la voce da guardare: commesse che l'ERP continua a
+    prendere senza mai dichiararle lavorate. Se quel numero cresce, qualcosa si
+    sta rompendo dall'altra parte."""
+    if x_api_key != API_KEY:
+        raise HTTPException(401, "chiave non valida")
+    con = get_con()
+    per_stato = dict(con.execute("SELECT stato, COUNT(*) FROM offerte GROUP BY stato;").fetchall())
+    sospette = con.execute(
+        """SELECT numero, preso_volte, preso_il FROM offerte
+           WHERE stato='confermata' AND COALESCE(preso_volte,0) >= 2
+           ORDER BY preso_volte DESC LIMIT 30;""").fetchall()
+    mai_prese = con.execute(
+        "SELECT COUNT(*) FROM offerte WHERE stato='confermata' AND preso_il IS NULL;").fetchone()[0]
+    ritiri = con.execute(
+        "SELECT quando, quante, esito FROM ritiri_erp ORDER BY id DESC LIMIT 10;").fetchall()
+    con.close()
+    return {"per_stato": per_stato,
+            "confermate_mai_prese": mai_prese,
+            "mai_confermate": [{"numero": r[0], "preso_volte": r[1], "ultima_volta": r[2]}
+                               for r in sospette],
+            "ultimi_ritiri": [{"quando": r[0], "quante": r[1], "esito": r[2]} for r in ritiri]}
 
 # ══════════════════ PARSER AI (DeepSeek) ══════════════════
 DEEPSEEK_API_KEY = os.environ.get("DEEPSEEK_API_KEY", "")
