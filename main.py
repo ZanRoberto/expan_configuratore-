@@ -433,8 +433,15 @@ def cancella_anagrafica(tipo: str, azienda: str = "default"):
 # una regola che vive solo nell'interfaccia non e' una regola.
 TABELLE_NOSTRE = ("materiali", "blocchi", "costi", "lavorazioni",
                   "composizione", "caratteristiche", "regole", "intervista",
-                  "clienti_nuovi")
-TABELLE_ERP    = ("clienti", "fornitori", "listini")
+                  "clienti_nuovi",
+                  # (28ago2026) LISTINI era classificata come tabella dell'ERP, per
+                  # il nome. Ma dentro ha cliente, agente, ricarico e provvigione:
+                  # nessun prezzo di vendita, nessun articolo. Non e' un listino del
+                  # gestionale — e' il moltiplicatore con cui il costo diventa prezzo
+                  # e la percentuale dell'agente. E' il cuore commerciale, ed e'
+                  # nostro. La classificazione va fatta sui dati, non sul nome.
+                  "listini")
+TABELLE_ERP    = ("clienti", "fornitori")
 
 def risolvi_azienda(param: str = "default") -> str:
     """UNICO punto in cui si decide di quale azienda stiamo parlando.
