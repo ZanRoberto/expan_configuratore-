@@ -1,0 +1,839 @@
+<!DOCTYPE html>
+<html lang="it">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>I dati dell'azienda</title>
+<style>
+  :root{
+    --carta:#f7f4ee; --carta-alta:#fffdf9; --inchiostro:#1c1a17; --inchiostro-tenue:#6b6459;
+    --riga:#e2dcd0; --verde:#0f4d3f; --verde-chiaro:#2f8b72; --ambra:#c2761c;
+    --rosso:#9d3520; --ombra:0 1px 0 rgba(28,26,23,.05);
+    --mono:ui-monospace,"SF Mono",Menlo,Consolas,monospace;
+    --testo:-apple-system,BlinkMacSystemFont,"Segoe UI",Inter,system-ui,sans-serif;
+  }
+  *{box-sizing:border-box}
+  body{margin:0;background:var(--carta);color:var(--inchiostro);font-family:var(--testo);
+       font-size:14px;line-height:1.5;-webkit-font-smoothing:antialiased}
+
+  /* ---------- testata ---------- */
+  .testata{background:var(--verde);color:#fff;padding:14px 26px;display:flex;
+           align-items:baseline;gap:14px;flex-wrap:wrap;position:sticky;top:0;z-index:20}
+  .testata h1{margin:0;font-size:16px;font-weight:700;letter-spacing:.04em}
+  .testata h1 span{color:var(--ambra);font-weight:400}
+  .ritorno{font-family:var(--mono);font-size:11px;color:rgba(255,255,255,.72);text-decoration:none;
+           border:1px solid rgba(255,255,255,.24);border-radius:3px;padding:4px 9px;white-space:nowrap}
+  .ritorno:hover{color:#fff;border-color:rgba(255,255,255,.6)}
+  .ritorno:focus-visible{outline:2px solid var(--ambra);outline-offset:2px}
+  .testata .stato{margin-left:auto;font-family:var(--mono);font-size:11px;
+                  color:rgba(255,255,255,.65)}
+  .testata .stato b{color:#fff;font-weight:600}
+
+  /* ---------- impianto ---------- */
+  .impianto{display:grid;grid-template-columns:236px 1fr;min-height:calc(100vh - 46px)}
+
+  /* ---------- colonna ---------- */
+  .colonna{border-right:1px solid var(--riga);padding:22px 0 90px;background:var(--carta)}
+  .gruppo{font-family:var(--mono);font-size:10px;letter-spacing:.13em;text-transform:uppercase;
+          color:var(--inchiostro-tenue);padding:0 22px;margin:20px 0 8px}
+  .gruppo:first-child{margin-top:0}
+  .voce{display:flex;align-items:center;gap:9px;padding:6px 22px;cursor:pointer;
+        border-left:2px solid transparent;background:none;border-top:0;border-right:0;
+        border-bottom:0;width:100%;text-align:left;font:inherit;color:inherit}
+  .voce:hover{background:var(--carta-alta)}
+  .voce[aria-current="true"]{background:var(--carta-alta);border-left-color:var(--verde);font-weight:600}
+  .voce:focus-visible{outline:2px solid var(--verde-chiaro);outline-offset:-2px}
+  .punto{width:7px;height:7px;border-radius:50%;flex:0 0 auto;background:var(--verde-chiaro)}
+  .punto.erp{background:transparent;border:1.5px solid var(--inchiostro-tenue)}
+  .punto.vuoto{background:var(--rosso)}
+  .voce .n{margin-left:auto;font-family:var(--mono);font-size:11px;color:var(--inchiostro-tenue)}
+  .legenda{margin:26px 22px 0;padding-top:16px;border-top:1px solid var(--riga);
+           font-size:11px;color:var(--inchiostro-tenue);display:grid;gap:7px}
+  .legenda div{display:flex;align-items:center;gap:9px}
+
+  /* ---------- foglio ---------- */
+  .foglio{padding:26px 30px 110px;min-width:0;max-width:1180px}
+  .titolo{display:flex;align-items:center;gap:12px;flex-wrap:wrap}
+  .titolo h2{margin:0;font-size:26px;font-weight:600;letter-spacing:-.01em;text-transform:capitalize}
+  .penna{font-family:var(--mono);font-size:10px;letter-spacing:.1em;text-transform:uppercase;
+         border:1px solid var(--riga);border-radius:2px;padding:3px 8px;color:var(--verde)}
+  .penna.sola-lettura{color:var(--inchiostro-tenue)}
+  .spiega{color:var(--inchiostro-tenue);max-width:62ch;margin:9px 0 0}
+  .spiega code{font-family:var(--mono);font-size:.92em;color:var(--inchiostro)}
+
+  .barra{display:flex;gap:10px;margin:20px 0 16px;flex-wrap:wrap}
+  .cerca{flex:1;min-width:200px;padding:9px 13px;border:1px solid var(--riga);border-radius:3px;
+         background:var(--carta-alta);font:inherit;color:inherit}
+  .cerca:focus{outline:none;border-color:var(--verde-chiaro)}
+  .bottone{padding:9px 14px;border:1px solid var(--riga);border-radius:3px;background:var(--carta-alta);
+           font:inherit;font-size:13px;cursor:pointer;color:var(--inchiostro);white-space:nowrap}
+  .bottone:hover:not(:disabled){border-color:var(--inchiostro-tenue)}
+  .bottone:disabled{opacity:.4;cursor:not-allowed}
+  .bottone.forte{background:var(--verde);border-color:var(--verde);color:#fff}
+  .bottone:focus-visible{outline:2px solid var(--verde-chiaro);outline-offset:2px}
+
+  /* ---------- tabella ---------- */
+  .telaio{border:1px solid var(--riga);border-radius:3px;background:var(--carta-alta);
+          overflow:auto;box-shadow:var(--ombra)}
+  table{border-collapse:collapse;width:100%;font-size:13px;table-layout:auto}
+  th.num,td.num{width:1%;white-space:nowrap}
+  td .cella{max-width:34ch;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+  td .cella:focus{max-width:none;white-space:normal;overflow:visible}
+  th{font-family:var(--mono);font-size:10px;letter-spacing:.08em;text-transform:uppercase;
+     color:var(--inchiostro-tenue);font-weight:500;text-align:left;padding:11px 14px;
+     border-bottom:1px solid var(--riga);white-space:nowrap;position:sticky;top:0;
+     background:var(--carta-alta)}
+  th.num,td.num{text-align:right}
+  td{padding:0;border-bottom:1px solid #efeae0;vertical-align:middle}
+  tr:last-child td{border-bottom:0}
+  tr:hover td{background:#fdfbf6}
+  td .cella{padding:9px 14px;min-height:37px;display:block;width:100%;border:0;background:none;
+            font:inherit;color:inherit;border-radius:0}
+  td input.cella{cursor:text}
+  td input.cella:hover{background:#f4efe4}
+  td input.cella:focus{outline:2px solid var(--verde-chiaro);outline-offset:-2px;background:#fff}
+  td input.cella::placeholder{color:#c3bcae}
+  /* la colonna dice da sola che i suoi valori si pescano da un elenco */
+  th .daTab{font-style:normal;color:var(--verde-chiaro);font-size:11px;cursor:help}
+  th .daTab.lieve{color:#b9b1a2}
+  /* un valore che l'elenco non conosce: non si vieta, si vede */
+  /* rimando rotto: la riga non aggancia niente. E' un guasto. */
+  td.rotto input.cella{box-shadow:inset 3px 0 0 var(--rosso);background:#fdf7f5}
+  /* valore mai usato prima: puo' essere voluto, ma si vede */
+  td.nuovo input.cella{box-shadow:inset 3px 0 0 var(--ambra)}
+  td.codice .cella{font-family:var(--mono);font-size:12px}
+  td.num .cella{font-family:var(--mono);text-align:right}
+  td.modificata .cella{box-shadow:inset 3px 0 0 var(--ambra)}
+  .via{width:34px}
+  .via button{border:0;background:none;color:var(--inchiostro-tenue);cursor:pointer;
+              padding:9px 10px;font-size:15px;line-height:1;border-radius:3px}
+  .via button:hover{color:var(--rosso);background:#f8ece8}
+
+  /* ---------- pannello cliente nuovo ---------- */
+  .velo{position:fixed;inset:0;background:rgba(28,26,23,.42);z-index:50;display:flex;
+        align-items:flex-start;justify-content:center;padding:5vh 16px;overflow:auto}
+  .pannello{background:var(--carta-alta);border-radius:4px;width:100%;max-width:560px;
+            box-shadow:0 14px 48px rgba(0,0,0,.3)}
+  .pannello header{padding:18px 22px 0}
+  .pannello h3{margin:0;font-size:19px;font-weight:600}
+  .pannello .sotto{color:var(--inchiostro-tenue);margin:6px 0 0;font-size:13px}
+  .modulo{padding:18px 22px;display:grid;gap:13px}
+  .campo{display:grid;gap:4px}
+  .campo label{font-family:var(--mono);font-size:10px;letter-spacing:.09em;
+               text-transform:uppercase;color:var(--inchiostro-tenue)}
+  .campo input,.campo select{padding:9px 11px;border:1px solid var(--riga);border-radius:3px;
+               font:inherit;background:#fff;color:inherit}
+  .campo input:focus,.campo select:focus{outline:none;border-color:var(--verde-chiaro)}
+  .campo.male input{border-color:var(--rosso)}
+  .esito{font-size:12px;min-height:16px}
+  .esito.si{color:var(--verde)} .esito.no{color:var(--rosso)}
+  .paio{display:grid;grid-template-columns:1fr 150px;gap:13px}
+  .pannello footer{padding:14px 22px 20px;display:flex;gap:10px;justify-content:flex-end;
+                   border-top:1px solid var(--riga);margin-top:4px}
+  .gia{border:1px solid var(--riga);border-left:3px solid var(--rosso);border-radius:3px;
+       padding:12px 14px;font-size:13px;background:#fdf6f3}
+  .gia b{display:block;margin-bottom:5px}
+  .gia ul{margin:0;padding-left:17px} .gia li{margin:2px 0}
+  @media (max-width:560px){ .paio{grid-template-columns:1fr} }
+
+  /* ---------- messaggi ---------- */
+  .vuoto{padding:46px 20px;text-align:center;color:var(--inchiostro-tenue)}
+  .vuoto b{display:block;color:var(--inchiostro);font-size:15px;margin-bottom:6px}
+  .allarme{border:1px solid var(--riga);border-left:3px solid var(--ambra);background:var(--carta-alta);
+           padding:13px 16px;border-radius:3px;margin-bottom:16px;font-size:13px}
+  .allarme.grave{border-left-color:var(--rosso)}
+  .allarme b{display:block;margin-bottom:3px}
+
+  /* ---------- pedana ---------- */
+  .pedana{position:fixed;left:0;right:0;bottom:0;background:var(--verde);color:#fff;
+          padding:11px 26px;display:flex;align-items:center;gap:16px;flex-wrap:wrap;z-index:30;
+          font-size:13px}
+  .pedana .coda{font-family:var(--mono);font-size:12px}
+  .pedana .coda b{color:var(--ambra)}
+  .pedana .nota{color:rgba(255,255,255,.6);font-size:12px}
+  .pedana .destra{margin-left:auto;display:flex;gap:10px;align-items:center}
+  .pedana .bottone{background:transparent;border-color:rgba(255,255,255,.3);color:#fff}
+  .pedana .bottone:hover:not(:disabled){border-color:#fff}
+  .pedana .bottone.forte{background:var(--ambra);border-color:var(--ambra);color:#231a0d;font-weight:600}
+
+  /* ---------- avviso volante ---------- */
+  .avviso{position:fixed;right:22px;bottom:70px;background:var(--inchiostro);color:#fff;
+          padding:11px 16px;border-radius:3px;font-size:13px;z-index:40;max-width:340px;
+          box-shadow:0 6px 24px rgba(0,0,0,.24)}
+  .avviso.male{background:var(--rosso)}
+  @media (prefers-reduced-motion:no-preference){
+    .avviso{animation:sali .18s ease-out}
+    @keyframes sali{from{opacity:0;transform:translateY(6px)}}
+  }
+  @media (max-width:760px){
+    .impianto{grid-template-columns:1fr}
+    .colonna{border-right:0;border-bottom:1px solid var(--riga);padding-bottom:16px}
+    .foglio{padding:20px 16px 130px}
+  }
+</style>
+</head>
+<body>
+
+<header class="testata">
+  <a class="ritorno" href="/" title="torna al configuratore">← preventivi e ordini</a>
+  <h1 id="nomeAzienda">DT GROUP <span>· i dati dell'azienda</span></h1>
+  <div class="stato" id="statoTestata">carico…</div>
+</header>
+
+<div class="impianto">
+  <nav class="colonna" id="colonna" aria-label="tabelle"></nav>
+
+  <main class="foglio">
+    <div id="avvisoTabella"></div>
+
+    <div class="titolo">
+      <h2 id="titoloTabella">—</h2>
+      <span class="penna" id="pennaTabella"></span>
+    </div>
+    <p class="spiega" id="spiegaTabella"></p>
+
+    <div class="barra">
+      <input class="cerca" id="cerca" type="search" placeholder="cerca…" aria-label="cerca nella tabella">
+      <button class="bottone" id="btnScarica">↓ scarica copia</button>
+      <button class="bottone forte" id="btnAggiungi">+ aggiungi</button>
+    </div>
+
+    <div class="telaio" id="telaio"></div>
+  </main>
+</div>
+
+<footer class="pedana">
+  <span class="coda" id="coda">—</span>
+  <span class="nota">escono solo i dati nostri — costi d'acquisto e codici loro non tornano indietro</span>
+  <span class="destra">
+    <button class="bottone" id="btnStorico">storico</button>
+    <button class="bottone forte" id="btnPassaggio">→ prepara il passaggio</button>
+  </span>
+</footer>
+
+<script>
+"use strict";
+
+// ─────────────────────────────────────────────────────────────
+// I dati veri vengono dal server. Niente e' scritto qui dentro:
+// le colonne si ricavano dalle righe, cosi' la stessa pagina va
+// bene per qualsiasi cliente senza toccare il codice.
+// ─────────────────────────────────────────────────────────────
+const AZIENDA = new URLSearchParams(location.search).get("azienda") || "default";
+const AUTORE  = localStorage.getItem("matrice_autore") || "ufficio tecnico";
+const PESANTE = 400000;   // oltre questo peso non si apre da soli: si chiede
+
+const S = { tabelle: [], attiva: null, righe: [], aggiornato: null, filtro: "", tocche: new Set() };
+
+const $  = (s) => document.querySelector(s);
+const esc = (v) => String(v ?? "").replace(/[&<>"]/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c]));
+const pesoUmano = (b) => b > 1048576 ? (b/1048576).toFixed(1)+" MB" : b > 1024 ? Math.round(b/1024)+" KB" : b+" byte";
+
+function avviso(testo, male){
+  const vecchio = document.querySelector(".avviso"); if (vecchio) vecchio.remove();
+  const d = document.createElement("div");
+  d.className = "avviso" + (male ? " male" : "");
+  d.setAttribute("role", male ? "alert" : "status");
+  d.textContent = testo;
+  document.body.appendChild(d);
+  setTimeout(() => d.remove(), male ? 7000 : 3200);
+}
+
+async function api(url, opzioni){
+  const r = await fetch(url, opzioni);
+  if (!r.ok){
+    let msg = "errore " + r.status;
+    try { const j = await r.json(); if (j.detail) msg = j.detail; } catch(e){}
+    throw new Error(msg);
+  }
+  return r.json();
+}
+
+// ─────────────── il menu ───────────────
+const ETICHETTE = {
+  costi:"costi blocco", materiali:"materiali", blocchi:"blocchi", lavorazioni:"lavorazioni",
+  composizione:"composizione", caratteristiche:"caratteristiche", regole:"regole",
+  intervista:"intervista", clienti:"clienti", fornitori:"fornitori", listini:"listini",
+  clienti_nuovi:"clienti nuovi"
+};
+const nome = (t) => ETICHETTE[t] || t;
+
+const SPIEGA = {
+  materiali:"Densità, resa e scarto non esistono nel gestionale: è il dato che fa nascere il prodotto. Il <code>codice ERP</code> è la colonna che arriva da loro — è la chiave che aggancia i due mondi.",
+  blocchi:"Le misure grezze da cui si ricava tutto. Cambiare qui cambia il calcolo di ogni pezzo che ne esce.",
+  costi:"Quanto costa un blocco intero. Da qui scendono i costi al pezzo, non il contrario.",
+  lavorazioni:"Il tempo e la mano che servono dopo il taglio. Senza queste, un preventivo è solo il costo del materiale.",
+  composizione:"Come si mettono insieme i pezzi per fare un prodotto finito.",
+  caratteristiche:"Le proprietà che il cliente può scegliere, e i valori ammessi.",
+  regole:"Cosa può stare insieme a cosa. Questa tabella non è un elenco: è il motore. Una riga sbagliata qui si sente su ogni configurazione.",
+  intervista:"Le domande che il configuratore fa, nell'ordine in cui le fa. Cambiarle cambia il percorso di chi configura.",
+  clienti:"Arriva dal gestionale. Qui si legge soltanto. Un cliente che nel gestionale non c'è ancora si crea qui accanto, in <b>clienti nuovi</b>.",
+  clienti_nuovi:"Clienti creati qui, che il gestionale non conosce ancora. Ci si può fare un preventivo; per confermare un ordine serve prima il codice vero dall'ERP.",
+  fornitori:"Arriva dal gestionale. Qui si legge soltanto.",
+  listini:"Arriva dal gestionale. Qui si legge soltanto."
+};
+
+// L'ordine non e' alfabetico: e' quello in cui si lavora. I materiali vengono
+// prima dei blocchi perche' un blocco e' fatto di un materiale, e le regole
+// stanno in fondo perche' non sono anagrafica ma motore.
+const ORDINE = ["materiali","blocchi","costi","lavorazioni","composizione",
+                "caratteristiche","regole","intervista"];
+function perOrdine(a, b){
+  const ia = ORDINE.indexOf(a.tipo), ib = ORDINE.indexOf(b.tipo);
+  if (ia !== -1 || ib !== -1) return (ia === -1 ? 99 : ia) - (ib === -1 ? 99 : ib);
+  return a.tipo.localeCompare(b.tipo, "it");
+}
+
+function disegnaColonna(){
+  const col = $("#colonna");
+  const gruppi = [
+    ["le nostre tabelle", "nostre"],
+    ["arrivano dall'ERP", "erp"],
+    ["il motore", "motore"]
+  ];
+  let html = "";
+  for (const [titolo, chiave] of gruppi){
+    const lista = S.tabelle.filter(t => t.gruppo === chiave).sort(perOrdine);
+    if (!lista.length) continue;
+    html += `<div class="gruppo">${esc(titolo)}</div>`;
+    for (const t of lista){
+      const grosso = t.byte > PESANTE;
+      const vuota  = (t.righe === 0) || (t.righe === null && t.byte < 10);
+      const classe = chiave === "erp" ? "punto erp" : (vuota ? "punto vuoto" : "punto");
+      const nota   = grosso ? pesoUmano(t.byte) : (t.righe === null ? "" : t.righe);
+      html += `<button class="voce" data-tipo="${esc(t.tipo)}"
+                 aria-current="${S.attiva === t.tipo}">
+                 <span class="${classe}"></span>
+                 <span>${esc(nome(t.tipo))}</span>
+                 <span class="n">${nota}</span>
+               </button>`;
+    }
+  }
+  html += `<div class="legenda">
+      <div><span class="punto"></span> la teniamo noi</div>
+      <div><span class="punto erp"></span> la tiene l'ERP</div>
+      <div><span class="punto vuoto"></span> manca qualcosa</div>
+      <div style="margin-top:9px;padding-top:9px;border-top:1px solid var(--riga)">
+        <span style="width:3px;height:13px;background:var(--ambra);flex:0 0 auto"></span> valore mai usato prima</div>
+      <div><span style="width:3px;height:13px;background:var(--rosso);flex:0 0 auto"></span> non esiste nella tabella a cui rimanda</div>
+    </div>`;
+  col.innerHTML = html;
+  col.querySelectorAll(".voce").forEach(b =>
+    b.addEventListener("click", () => apri(b.dataset.tipo)));
+}
+
+// ─────────────── apertura di una tabella ───────────────
+async function apri(tipo, forza){
+  const meta = S.tabelle.find(t => t.tipo === tipo);
+  S.attiva = tipo; S.filtro = ""; S.tocche.clear(); $("#cerca").value = "";
+  disegnaColonna();
+
+  $("#titoloTabella").textContent = nome(tipo);
+  $("#spiegaTabella").innerHTML = SPIEGA[tipo] || "";
+  const scrivibile = meta && meta.gruppo === "nostre";
+  $("#pennaTabella").textContent = scrivibile ? "✎ la penna è vostra" : "sola lettura";
+  $("#pennaTabella").className = "penna" + (scrivibile ? "" : " sola-lettura");
+  const suClienti = (tipo === "clienti" || tipo === "clienti_nuovi");
+  $("#btnAggiungi").disabled = !scrivibile && !suClienti;
+  $("#btnAggiungi").textContent = suClienti ? "+ cliente nuovo" : "+ aggiungi";
+
+  // Una tabella molto grossa non si apre da sola: 8,8 MB partiti per sbaglio
+  // sono otto secondi di attesa che nessuno ha chiesto.
+  if (meta && meta.byte > PESANTE && !forza){
+    $("#avvisoTabella").innerHTML =
+      `<div class="allarme"><b>Questa tabella pesa ${pesoUmano(meta.byte)}</b>
+       Non la apro da sola: caricarla richiede tempo e non è dato d'anagrafica.
+       <button class="bottone" id="btnForza" style="margin-top:9px">aprila lo stesso</button></div>`;
+    $("#btnForza").addEventListener("click", () => apri(tipo, true));
+    $("#telaio").innerHTML = "";
+    return;
+  }
+  $("#avvisoTabella").innerHTML = "";
+  $("#telaio").innerHTML = `<div class="vuoto">carico…</div>`;
+
+  try {
+    const d = await api(`/api/anagrafica?azienda=${encodeURIComponent(AZIENDA)}&tipi=${encodeURIComponent(tipo)}`);
+    const righe = d[tipo];
+    S.righe = Array.isArray(righe) ? righe : [];
+    S.aggiornato = meta ? meta.aggiornato : null;
+    await disegnaTabella();
+  } catch(e){
+    $("#telaio").innerHTML = `<div class="vuoto"><b>Non riesco a leggere questa tabella</b>
+      ${esc(e.message)}<br><br>Ricarica la pagina. Se resta così, la tabella potrebbe
+      essere stata svuotata dal gestionale.</div>`;
+  }
+}
+
+// Le colonne si ricavano dai dati: guardo tutte le righe, non solo la prima,
+// perche' una riga puo' avere campi che le altre non hanno.
+function colonneDi(righe){
+  const viste = [];
+  for (const r of righe.slice(0, 200)){
+    if (r && typeof r === "object" && !Array.isArray(r))
+      for (const k of Object.keys(r)) if (!viste.includes(k)) viste.push(k);
+  }
+  return viste;
+}
+const pareNumero = (v) => v !== "" && v !== null && !isNaN(Number(v));
+const pareCodice = (c) => /cod|codice|erp|sigla|id/i.test(c);
+
+// ───────── I CAMPI SI PESCANO DA UNA TABELLA ─────────
+// Scrivere «materasso» a mano in una colonna che ne accetta tre e' un errore che
+// aspetta di succedere: basta una maiuscola o uno spazio e la riga non aggancia
+// piu' niente. Qui ogni colonna dichiara il suo dominio, e chi scrive sceglie.
+//
+// Ma SUGGERISCE, non obbliga: se un valore nuovo non si potesse scrivere, non si
+// potrebbe mai aggiungere una tecnologia che prima non esisteva. Il valore
+// estraneo si scrive — e viene marcato, perche' si veda.
+
+// Colonne che puntano a un'ALTRA tabella: [tabella, colonna dove stanno i valori]
+const RIFERIMENTI = {
+  materiale:   ["materiali", "materiale"],
+  cliente:     ["clienti", "codice"],
+  fornitore:   ["fornitori", "fornitore"],
+  lavorazione: ["lavorazioni", "lavorazione"],
+  prodotto:    ["caratteristiche", "prodotto"],
+  famiglia:    ["caratteristiche", "famiglia"],
+  listino:     ["listini", "listino"]
+};
+const SI_NO = ["sì","si","no","true","false","vero","falso","x",""];
+const CACHE = {};   // tabelle gia' scaricate per fare da elenco
+
+function distinti(righe, colonna){
+  const visti = [];
+  for (const r of righe){
+    if (!r || typeof r !== "object") continue;
+    const v = r[colonna];
+    if (v === null || v === undefined || v === "") continue;
+    String(v).split("|").forEach(t => {
+      t = t.trim(); if (t && !visti.includes(t)) visti.push(t);
+    });
+  }
+  return visti.sort((a,b) => a.localeCompare(b,"it"));
+}
+
+// Cos'e' una colonna: elenco chiuso, suggerimenti, sì/no, o testo libero.
+function dominio(colonna, righe, colonne){
+  const nome = String(colonna).toLowerCase();
+  const propri = distinti(righe, colonna);
+  const multi  = righe.some(r => r && typeof r[colonna] === "string" && r[colonna].includes("|"));
+
+  // «primarie» elenca colonne di QUESTA tabella: i valori ammessi sono i nomi
+  // delle colonne, e nient'altro. E' il caso piu' facile da sbagliare a mano.
+  if (/primari/.test(nome))
+    return {valori: colonne.filter(c => !/^(prodotto|famiglia|primarie)$/i.test(c)),
+            chiuso: true, multi: true, nota: "le colonne di questa tabella"};
+
+  // UNA COLONNA-CHIAVE NON E' UN DOMINIO. Se ogni riga ha un valore diverso —
+  // 'prodotto' dentro caratteristiche, 'materiale' dentro materiali — quella
+  // colonna e' il nome della riga: aggiungerne uno nuovo e' la normalita', non
+  // un'anomalia da segnalare. Suggerire i valori esistenti la' sarebbe rumore.
+  if (propri.length >= 3 && propri.length === righe.length && !multi)
+    return {valori: [], chiuso: false, multi: false, nota: ""};
+
+  const rif = RIFERIMENTI[nome];
+  if (rif){
+    // Se la tabella di riferimento e' QUESTA (famiglia dentro caratteristiche),
+    // l'elenco sono le sue stesse righe: non c'e' niente da scaricare.
+    const fonte = (rif[0] === S.attiva) ? righe : CACHE[rif[0]];
+    if (fonte){
+      const v = distinti(fonte, rif[1]);
+      if (v.length) return {valori: v, chiuso: (rif[0] !== S.attiva), multi,
+                            nota: (rif[0] === S.attiva) ? "già usati qui" : "da " + rif[0]};
+    }
+  }
+  if (propri.length && propri.every(x => SI_NO.includes(x.toLowerCase())))
+    return {valori: ["sì","no"], chiuso: true, multi: false, nota: "sì / no"};
+  // Poche possibilita' ripetute su molte righe: e' un elenco, anche se nessuno
+  // l'ha mai dichiarato tale.
+  if (propri.length && propri.length <= 12 && righe.length >= 3 && propri.length < righe.length)
+    return {valori: propri, chiuso: false, multi, nota: "già usati qui"};
+  return {valori: [], chiuso: false, multi, nota: ""};
+}
+
+// Scarica le tabelle a cui questa fa riferimento — in una sola chiamata.
+async function caricaRiferimenti(colonne){
+  const servono = [...new Set(colonne
+    .map(c => RIFERIMENTI[String(c).toLowerCase()])
+    .filter(r => r && !CACHE[r[0]])
+    .map(r => r[0]))];
+  if (!servono.length) return;
+  try {
+    const d = await api(`/api/anagrafica?azienda=${encodeURIComponent(AZIENDA)}&tipi=${encodeURIComponent(servono.join(","))}`);
+    for (const t of servono) CACHE[t] = Array.isArray(d[t]) ? d[t] : [];
+  } catch(e){ for (const t of servono) CACHE[t] = []; }   // senza elenco si scrive a mano
+}
+
+// Torna "" (a posto), "nuovo" (non ancora usato qui) o "rotto" (rimanda a una
+// riga che in un'altra tabella non esiste).
+// Sono due cose diverse e vanno mostrate diverse: aggiungere una famiglia nuova
+// e' legittimo, scrivere un materiale che l'anagrafica non ha e' un guasto —
+// quella riga di distinta uscira' senza codice ERP e senza costo.
+function estraneo(valore, dom){
+  if (!dom.valori.length) return "";
+  const pezzi = dom.multi ? String(valore).split("|") : [String(valore)];
+  const fuori = pezzi.some(t => { t = t.trim();
+    return t && !dom.valori.some(v => v.toLowerCase() === t.toLowerCase()); });
+  return fuori ? (dom.chiuso ? "rotto" : "nuovo") : "";
+}
+
+async function disegnaTabella(){
+  const telaio = $("#telaio");
+  if (!S.righe.length){
+    telaio.innerHTML = `<div class="vuoto"><b>Questa tabella è vuota</b>
+      ${$("#btnAggiungi").disabled ? "Si riempirà al prossimo scarico dal gestionale."
+                                   : "Aggiungi la prima riga per cominciare."}</div>`;
+    return;
+  }
+  const semplici = S.righe.every(r => r && typeof r === "object" && !Array.isArray(r));
+  if (!semplici){
+    telaio.innerHTML = `<div class="vuoto"><b>Contenuto non tabellare</b>
+      Questa tabella non è fatta di righe uguali fra loro: qui non si modifica a mano.</div>`;
+    return;
+  }
+
+  const colonne = colonneDi(S.righe);
+  const scrivibile = !$("#btnAggiungi").disabled;
+  const f = S.filtro.toLowerCase();
+  if (scrivibile) await caricaRiferimenti(colonne);
+
+  const domini = {}; colonne.forEach(c => domini[c] = dominio(c, S.righe, colonne));
+
+  let elenchi = "";
+  colonne.forEach((c,k) => { if (domini[c].valori.length)
+    elenchi += `<datalist id="dl${k}">${domini[c].valori.map(v=>`<option value="${esc(v)}">`).join("")}</datalist>`; });
+
+  let corpo = "";
+  S.righe.forEach((riga, i) => {
+    if (f && !JSON.stringify(riga).toLowerCase().includes(f)) return;
+    corpo += "<tr>";
+    colonne.forEach((c,k) => {
+      const v = riga[c], dom = domini[c];
+      const testo = (v === null || v === undefined) ? "" : (typeof v === "object" ? JSON.stringify(v) : String(v));
+      const modificabile = scrivibile && typeof v !== "object";
+      const fuori = (modificabile && testo) ? estraneo(testo, dom) : "";
+      const classi = [pareNumero(v) ? "num" : "", pareCodice(c) ? "codice" : "",
+                      S.tocche.has(i + "|" + c) ? "modificata" : "",
+                      fuori].filter(Boolean).join(" ");
+      if (!modificabile){
+        corpo += `<td class="${classi}"><span class="cella">${esc(testo || "—")}</span></td>`;
+      } else {
+        const lista = dom.valori.length ? ` list="dl${k}"` : "";
+        const titolo = fuori === "rotto"
+            ? ` title="«${esc(testo)}» non esiste in ${esc(dom.nota.replace("da ",""))} — questa riga non aggancerà niente"`
+          : fuori === "nuovo"
+            ? ` title="«${esc(testo)}» non è fra quelli già usati qui: se è voluto va bene, se è un refuso si vede"`
+            : "";
+        corpo += `<td class="${classi}"><input class="cella" type="text"${lista}${titolo}
+            value="${esc(testo)}" data-i="${i}" data-c="${esc(c)}"
+            placeholder="${dom.valori.length ? "—" : ""}"></td>`;
+      }
+    });
+    corpo += scrivibile
+      ? `<td class="via"><button data-via="${i}" title="togli questa riga" aria-label="togli riga">×</button></td>`
+      : "<td class='via'></td>";
+    corpo += "</tr>";
+  });
+
+  telaio.innerHTML = elenchi + `<table><thead><tr>${
+      colonne.map(c => {
+        const d = domini[c];
+        const segno = d.chiuso ? ' <i class="daTab" title="valori ' + esc(d.nota) + '">▾</i>'
+                   : d.valori.length ? ' <i class="daTab lieve" title="valori ' + esc(d.nota) + '">▾</i>' : "";
+        return `<th class="${pareNumero(S.righe[0][c]) ? "num" : ""}">${esc(c)}${segno}</th>`;
+      }).join("")
+    }<th></th></tr></thead><tbody>${corpo}</tbody></table>`;
+
+  telaio.querySelectorAll("input.cella").forEach(cel => {
+    cel.addEventListener("focus", () => { cel.dataset.era = cel.value; });
+    cel.addEventListener("keydown", ev => {
+      if (ev.key === "Enter"){ ev.preventDefault(); cel.blur(); }
+      if (ev.key === "Escape"){ cel.value = cel.dataset.era; cel.blur(); }
+    });
+    cel.addEventListener("change", () => salvaCella(cel));
+    cel.addEventListener("blur",   () => salvaCella(cel));
+  });
+  telaio.querySelectorAll("[data-via]").forEach(b =>
+    b.addEventListener("click", () => togliRiga(Number(b.dataset.via))));
+}
+
+// ─────────────── scrittura ───────────────
+async function salvaCella(cel){
+  const testo = cel.value.trim();
+  if (cel.dataset.era === undefined || testo === (cel.dataset.era || "").trim()) return;
+  cel.dataset.era = testo;                       // change + blur non salvano due volte
+  const i = Number(cel.dataset.i), campo = cel.dataset.c;
+  const riga = { ...S.righe[i] };
+  const prima = riga[campo];
+  riga[campo] = (typeof prima === "number" && pareNumero(testo)) ? Number(testo)
+              : (testo === "—" ? "" : testo);
+  try {
+    const r = await api(`/api/anagrafica/${encodeURIComponent(S.attiva)}/riga`, {
+      method: "PATCH", headers: {"Content-Type":"application/json"},
+      body: JSON.stringify({azienda: AZIENDA, indice: i, riga,
+                            atteso: S.aggiornato, autore: AUTORE})
+    });
+    S.righe[i] = riga; S.aggiornato = r.aggiornato;
+    S.tocche.add(i + "|" + campo);
+    cel.closest("td").classList.add("modificata");
+    // se la tabella modificata fa da elenco ad altre, l'elenco va rinfrescato
+    if (CACHE[S.attiva]) CACHE[S.attiva] = S.righe;
+    avviso("salvato");
+    aggiornaCoda(); aggiornaIndice();
+  } catch(e){
+    cel.value = cel.dataset.era = (cel.dataset.era || "");
+    avviso(e.message, true);
+    if (String(e.message).includes("qualcun altro")) apri(S.attiva, true);
+  }
+}
+
+async function aggiungiRiga(){
+  const colonne = colonneDi(S.righe);
+  const vuota = {};
+  (colonne.length ? colonne : ["codice","descrizione"]).forEach(c => vuota[c] = "");
+  /* Se in tutta la tabella una colonna ha sempre lo stesso valore, la riga nuova
+     nasce con quello: e' quasi sempre giusto e toglie un campo da digitare. */
+  colonne.forEach(c => { const d = distinti(S.righe, c);
+    if (d.length === 1 && S.righe.length >= 3) vuota[c] = d[0]; });
+  try {
+    const r = await api(`/api/anagrafica/${encodeURIComponent(S.attiva)}/riga`, {
+      method: "POST", headers: {"Content-Type":"application/json"},
+      body: JSON.stringify({azienda: AZIENDA, riga: vuota, atteso: S.aggiornato, autore: AUTORE})
+    });
+    S.righe.push(vuota); S.aggiornato = r.aggiornato;
+    await disegnaTabella();
+    const celle = $("#telaio").querySelectorAll("input.cella");
+    if (celle.length) celle[celle.length - 1].focus();
+    aggiornaCoda(); aggiornaIndice();
+  } catch(e){ avviso(e.message, true); }
+}
+
+async function togliRiga(i){
+  const etichetta = Object.values(S.righe[i]).find(v => typeof v === "string" && v) || ("riga " + (i+1));
+  if (!confirm(`Tolgo «${etichetta}» da ${nome(S.attiva)}?\n\nResta nello storico: si potrà sempre dire cosa c'era.`)) return;
+  try {
+    const q = new URLSearchParams({azienda: AZIENDA, indice: i, autore: AUTORE});
+    if (S.aggiornato) q.set("atteso", S.aggiornato);
+    const r = await api(`/api/anagrafica/${encodeURIComponent(S.attiva)}/riga?` + q, {method:"DELETE"});
+    S.righe.splice(i, 1); S.aggiornato = r.aggiornato; S.tocche.clear();
+    if (CACHE[S.attiva]) CACHE[S.attiva] = S.righe;
+    await disegnaTabella(); avviso("tolta");
+    aggiornaCoda(); aggiornaIndice();
+  } catch(e){ avviso(e.message, true); }
+}
+
+// ─────────────── coda verso l'ERP ───────────────
+async function aggiornaCoda(){
+  try {
+    const d = await api(`/api/erp/da_inviare?azienda=${encodeURIComponent(AZIENDA)}`);
+    $("#coda").innerHTML = d.da_inviare
+      ? `da mandare all'ERP: <b>${d.da_inviare} modifiche</b>` +
+        (d.ultimo_invio ? ` · ultimo invio ${esc(d.ultimo_invio.replace("T"," ").slice(0,16))}` : "")
+      : (d.ultimo_invio ? `tutto mandato · ultimo invio ${esc(d.ultimo_invio.replace("T"," ").slice(0,16))}`
+                        : "niente ancora da mandare");
+    $("#btnPassaggio").disabled = !d.da_inviare;
+  } catch(e){ $("#coda").textContent = "coda non leggibile"; }
+}
+
+async function preparaPassaggio(){
+  try {
+    const a = await api("/api/erp/prepara", {method:"POST", headers:{"Content-Type":"application/json"},
+                        body: JSON.stringify({azienda: AZIENDA})});
+    if (!a.conteggio){ avviso("non c'è niente da mandare"); return; }
+    const elenco = a.modifiche.slice(0, 12)
+      .map(m => `  ${m.azione}  ${m.tabella} · ${m.riga}`).join("\n");
+    const extra = a.conteggio > 12 ? `\n  … e altre ${a.conteggio - 12}` : "";
+    if (!confirm(`Escono ${a.conteggio} modifiche:\n\n${elenco}${extra}\n\nScarico il file e le segno come mandate?`)) return;
+    const d = await api("/api/erp/prepara", {method:"POST", headers:{"Content-Type":"application/json"},
+                        body: JSON.stringify({azienda: AZIENDA, conferma: true})});
+    scaricaFile(`passaggio-erp-${new Date().toISOString().slice(0,10)}.json`,
+                JSON.stringify(d, null, 2));
+    avviso(`${d.conteggio} modifiche pronte per l'ERP`);
+    aggiornaCoda();
+  } catch(e){ avviso(e.message, true); }
+}
+
+async function mostraStorico(){
+  try {
+    const d = await api(`/api/anagrafica/storico?azienda=${encodeURIComponent(AZIENDA)}&quante=30`);
+    if (!d.length){ avviso("nessuna modifica registrata"); return; }
+    alert("Ultime modifiche\n\n" + d.map(r =>
+      `${r.quando.replace("T"," ").slice(0,16)}  ${r.azione.padEnd(10)} ${r.tipo} · ${r.riga}` +
+      `\n${" ".repeat(18)}${r.autore}${r.inviato_erp ? "  (mandata all'ERP)" : ""}`).join("\n"));
+  } catch(e){ avviso(e.message, true); }
+}
+
+// ───────── cliente nuovo ─────────
+// L'anagrafica clienti è del gestionale. Ma chi ha davanti un cliente nuovo non
+// può aspettare: qui nasce PROVVISORIO, dichiarato come tale, e va in coda
+// all'ERP come richiesta. Quando l'ERP risponde col suo codice, diventa vero.
+const PAESI = ["Italia","Germania","Francia","Spagna","Austria","Belgio","Paesi Bassi",
+               "Portogallo","Svizzera","Altro"];
+const SIGLE = {Italia:"IT",Germania:"DE",Francia:"FR",Spagna:"ES",Austria:"AT",
+               Belgio:"BE","Paesi Bassi":"NL",Portogallo:"PT",Svizzera:"CH",Altro:""};
+
+function apriPannelloCliente(){
+  const velo = document.createElement("div");
+  velo.className = "velo"; velo.setAttribute("role","dialog"); velo.setAttribute("aria-modal","true");
+  velo.innerHTML = `<div class="pannello">
+    <header>
+      <h3>Un cliente che il gestionale non ha ancora</h3>
+      <p class="sotto">Nasce qui come provvisorio. Ci puoi fare un preventivo subito;
+         per confermare un ordine serve prima il codice dall'ERP.</p>
+    </header>
+    <div class="modulo">
+      <div class="campo">
+        <label for="cRag">ragione sociale</label>
+        <input id="cRag" autocomplete="off" placeholder="come si chiama davvero, per intero">
+        <div class="esito" id="eRag"></div>
+      </div>
+      <div class="paio">
+        <div class="campo">
+          <label for="cPiva">partita IVA</label>
+          <input id="cPiva" autocomplete="off" placeholder="11 cifre, o con prefisso estero">
+        </div>
+        <div class="campo">
+          <label for="cPaese">paese</label>
+          <select id="cPaese">${PAESI.map(p=>`<option${p==="Italia"?" selected":""}>${p}</option>`).join("")}</select>
+        </div>
+      </div>
+      <div class="esito" id="ePiva"></div>
+      <div class="campo">
+        <label for="cInd">indirizzo</label>
+        <input id="cInd" autocomplete="off" placeholder="via, città, provincia">
+      </div>
+      <div class="paio">
+        <div class="campo">
+          <label for="cPag">pagamento</label>
+          <input id="cPag" autocomplete="off" placeholder="es. BB 60gg">
+        </div>
+        <div class="campo">
+          <label for="cZona">zona</label>
+          <input id="cZona" autocomplete="off" placeholder="es. Nord">
+        </div>
+      </div>
+      <div id="cGia"></div>
+    </div>
+    <footer>
+      <button class="bottone" id="cAnnulla">annulla</button>
+      <button class="bottone forte" id="cCrea" disabled>crea il cliente</button>
+    </footer></div>`;
+  document.body.appendChild(velo);
+
+  const rag=velo.querySelector("#cRag"), piva=velo.querySelector("#cPiva"),
+        paese=velo.querySelector("#cPaese"), crea=velo.querySelector("#cCrea");
+  let doppioni = [], attesa = null;
+
+  const chiudi = () => velo.remove();
+  velo.querySelector("#cAnnulla").addEventListener("click", chiudi);
+  velo.addEventListener("click", ev => { if (ev.target === velo) chiudi(); });
+  velo.addEventListener("keydown", ev => { if (ev.key === "Escape") chiudi(); });
+  rag.focus();
+
+  // Si controlla mentre si scrive, non al salvataggio: scoprire il doppione
+  // dopo aver compilato tutto è la ricetta perché lo si forzi comunque.
+  async function controlla(){
+    velo.querySelector("#eRag").textContent = rag.value.trim() ? "" : "";
+    if (!rag.value.trim() || !piva.value.trim()){ crea.disabled = true; return; }
+    try {
+      const r = await api("/api/clienti/verifica", {method:"POST",
+        headers:{"Content-Type":"application/json"},
+        body: JSON.stringify({azienda:AZIENDA, piva:piva.value,
+                              paese:SIGLE[paese.value]||"IT", ragione_sociale:rag.value})});
+      const e = velo.querySelector("#ePiva");
+      e.className = "esito " + (r.piva.valida ? "si" : "no");
+      e.textContent = r.piva.valida
+        ? (r.piva.normalizzata ? "✓ " + r.piva.normalizzata + (r.piva.spiegazione.includes("VIES") ? " — forma corretta" : "") : "✓")
+        : "✗ " + r.piva.spiegazione;
+      velo.querySelector("#cPiva").parentElement.classList.toggle("male", !r.piva.valida);
+
+      doppioni = r.doppioni || [];
+      velo.querySelector("#cGia").innerHTML = doppioni.length
+        ? `<div class="gia"><b>Forse esiste già</b><ul>${doppioni.map(d =>
+            `<li>${esc(d.cliente)}${d.codice ? " ("+esc(d.codice)+")" : ""} — ${esc(d.perche)}, ${esc(d.dove)}</li>`
+          ).join("")}</ul></div>` : "";
+      crea.disabled = !r.piva.valida;
+      crea.textContent = doppioni.length ? "crea lo stesso" : "crea il cliente";
+    } catch(e){ crea.disabled = true; }
+  }
+  const rimanda = () => { clearTimeout(attesa); attesa = setTimeout(controlla, 350); };
+  rag.addEventListener("input", rimanda);
+  piva.addEventListener("input", rimanda);
+  paese.addEventListener("change", controlla);
+
+  crea.addEventListener("click", async () => {
+    if (doppioni.length && !confirm(
+        `Il gestionale ha già qualcosa di simile:\n\n` +
+        doppioni.map(d => "  " + d.cliente + " — " + d.perche).join("\n") +
+        `\n\nDue clienti uguali con codici diversi spezzano lo storico.\nSono davvero aziende diverse?`)) return;
+    crea.disabled = true; crea.textContent = "creo…";
+    try {
+      const r = await api("/api/clienti/nuovo", {method:"POST",
+        headers:{"Content-Type":"application/json"},
+        body: JSON.stringify({azienda:AZIENDA, autore:AUTORE, forza:!!doppioni.length,
+          cliente:{ragione_sociale:rag.value.trim(), piva:piva.value.trim(),
+                   paese:paese.value, indirizzo:velo.querySelector("#cInd").value.trim(),
+                   pagamento:velo.querySelector("#cPag").value.trim(),
+                   zona:velo.querySelector("#cZona").value.trim()}})});
+      chiudi();
+      avviso(`${r.codice} creato — ${r.stato}`);
+      await aggiornaIndice(); await apri("clienti_nuovi"); aggiornaCoda();
+    } catch(e){
+      crea.disabled = false; crea.textContent = "crea lo stesso";
+      avviso(e.message, true);
+    }
+  });
+}
+
+function scaricaFile(nomeFile, testo){
+  const u = URL.createObjectURL(new Blob([testo], {type:"application/json"}));
+  const a = document.createElement("a");
+  a.href = u; a.download = nomeFile; a.click();
+  setTimeout(() => URL.revokeObjectURL(u), 1500);
+}
+
+// ─────────────── avvio ───────────────
+async function aggiornaIndice(){
+  const d = await api(`/api/anagrafica?azienda=${encodeURIComponent(AZIENDA)}&indice=1`);
+  S.tabelle = d.tabelle || [];
+  const nostre = S.tabelle.filter(t => t.gruppo === "nostre").length;
+  $("#statoTestata").innerHTML =
+    `tenute da <b>${esc(AUTORE)}</b> · ${nostre} tabelle vostre di ${S.tabelle.length}`;
+  disegnaColonna();
+}
+
+async function avvia(){
+  try {
+    await aggiornaIndice();
+    if (!S.tabelle.length){
+      $("#telaio").innerHTML = `<div class="vuoto"><b>Non c'è ancora niente</b>
+        Il primo scarico dal gestionale riempirà queste tabelle.</div>`;
+      return;
+    }
+    const primo = (S.tabelle.find(t => t.gruppo === "nostre") || S.tabelle[0]).tipo;
+    await apri(primo);
+    aggiornaCoda();
+  } catch(e){
+    const anteprima = !location.pathname.startsWith("/dati");
+    $("#telaio").innerHTML = anteprima
+      ? `<div class="vuoto"><b>Questa pagina va aperta dal tuo server</b>
+         In anteprima i dati non ci sono: le chiama a chi la sta mostrando, non a Tecnaria.<br><br>
+         Aprila su <code>/dati</code> del tuo indirizzo.</div>`
+      : `<div class="vuoto"><b>Il server non risponde</b>${esc(e.message)}<br><br>
+         Se è appena stato riavviato, aspetta qualche secondo e ricarica.</div>`;
+  }
+}
+
+$("#cerca").addEventListener("input", ev => { S.filtro = ev.target.value; disegnaTabella(); });  /* asincrona: non serve attenderla, ridisegna e basta */
+$("#btnAggiungi").addEventListener("click", () =>
+  (S.attiva === "clienti" || S.attiva === "clienti_nuovi") ? apriPannelloCliente() : aggiungiRiga());
+$("#btnScarica").addEventListener("click", () =>
+  scaricaFile(`${S.attiva}-${new Date().toISOString().slice(0,10)}.json`,
+              JSON.stringify(S.righe, null, 2)));
+$("#btnPassaggio").addEventListener("click", preparaPassaggio);
+$("#btnStorico").addEventListener("click", mostraStorico);
+
+avvia();
+</script>
+</body>
+</html>
