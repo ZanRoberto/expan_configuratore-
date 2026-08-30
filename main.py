@@ -632,6 +632,23 @@ def erp_prepara(body: dict = Body(None)):
     pacchetto = [{"quando": r[1], "autore": r[2], "tabella": r[3], "azione": r[4],
                   "riga": r[5], "dati": json.loads(r[6]) if r[6] else None}
                  for r in righe if r[3] in TABELLE_NOSTRE]
+    # (28ago2026) I MATERIALI ESCONO CON I LORO DATI D'ACQUISTO.
+    # L'ERP deve poterci costruire sopra MRP e ordini a fornitore, e per farlo
+    # gli servono tre cose che nessuno gli puo' dare tranne noi: in che unita' si
+    # compra, quanto pesa quell'unita', e ogni quanto/quanto se ne ordina.
+    # Le righe che non le hanno escono lo stesso, ma dichiarate incomplete: un
+    # campo mancante che nessuno nomina e' un ordine che non parte, e non si sa
+    # perche'.
+    CHIAVI_ACQUISTO = ("um_acquisto", "lotto_minimo", "giorni_consegna", "fornitore")
+    for m in pacchetto:
+        if m["tabella"] != "materiali" or not isinstance(m.get("dati"), dict):
+            continue
+        d = m["dati"]
+        mancanti = [k for k in CHIAVI_ACQUISTO
+                    if not str(d.get(k) or "").strip()]
+        m["acquisto_completo"] = not mancanti
+        if mancanti:
+            m["acquisto_mancante"] = mancanti
     conferma = bool(body.get("conferma"))
     if conferma and righe:
         con.execute("UPDATE storico_dati SET inviato_erp=1 WHERE azienda_id=? AND inviato_erp=0;",
