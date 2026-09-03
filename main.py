@@ -16,7 +16,7 @@ primo deploy su Render, leggendo i log. Il CUORE (numerazione atomica) è
 invece già stato testato a parte con 50 richieste concorrenti: zero collisioni.
 """
 from pydantic import BaseModel
-import os, sqlite3, datetime, json, base64, hmac
+import os, sqlite3, datetime, json, base64, hmac, hashlib, secrets, contextvars
 import urllib.request, urllib.error
 from fastapi import FastAPI, HTTPException, Header, Request, Body, Response
 from fastapi.responses import JSONResponse, HTMLResponse, FileResponse
@@ -31,7 +31,101 @@ HTML_FILE = os.environ.get("HTML_FILE", "configuratore_expan_v2.html")
 # (21ago2026) Ogni cliente ha la SUA istanza con la SUA copia del programma.
 # Senza un numero di versione dichiarato non c'e' modo di sapere chi e' rimasto
 # indietro dopo un aggiornamento del motore: si scopre dai difetti, troppo tardi.
-VERSIONE = "2026.08.25"
+VERSIONE = "2026.09.03"
+
+# ══════════════════ REGISTRO CLIENTI E ISOLAMENTO ══════════════════
+# (03set2026) DUE TABELLE SU SEI SAPEVANO DI CHI ERANO I DATI.
+# 'anagrafica' e 'storico_dati' hanno azienda_id; 'offerte', 'firme',
+# 'contatori' e 'ritiri_erp' no. Con due clienti nello stesso file, il secondo
+# vedrebbe le offerte del primo e i numeri d'ordine si mescolerebbero.
+# Aggiungere azienda_id a quattro tabelle e ricordarsi la WHERE in ogni query e'
+# la strada fragile: basta dimenticarla una volta e i dati escono.
+#
+# Qui l'isolamento non dipende da una condizione da ricordare: OGNI CLIENTE HA
+# IL SUO FILE. Sbagliare e' molto piu' difficile, il backup di un cliente e' un
+# file da copiare, e consegnarglielo il giorno che se ne va e' un file da dare.
+#
+# DT GROUP NON E' UN CASO SPECIALE: e' il cliente numero uno, con la sua chiave
+# e il suo file come tutti. Un percorso privilegiato nel codice diventa il ramo
+# che nessuno tocca piu' e che rompe ogni aggiornamento.
+REGISTRO_PATH = os.environ.get("REGISTRO_PATH") or os.path.join(
+    os.path.dirname(os.path.abspath(DB_PATH)) or ".", "registro.db")
+CLIENTI_DIR   = os.environ.get("CLIENTI_DIR") or os.path.join(
+    os.path.dirname(os.path.abspath(DB_PATH)) or ".", "clienti")
+
+# Chi sta parlando, in questa richiesta. Impostato dal middleware, letto da
+# get_con() e da risolvi_azienda(). Una variabile di contesto e' isolata per
+# richiesta: due clienti insieme non si scambiano l'identita'.
+_AZIENDA = contextvars.ContextVar("azienda_corrente", default=None)
+
+def _impronta(chiave: str) -> str:
+    """La chiave NON si conserva in chiaro: si conserva la sua impronta.
+    Chi legge il registro non puo' entrare da nessuna parte."""
+    return hashlib.sha256(("matrice/" + str(chiave)).encode("utf-8")).hexdigest()
+
+def registro_con():
+    os.makedirs(os.path.dirname(os.path.abspath(REGISTRO_PATH)) or ".", exist_ok=True)
+    con = sqlite3.connect(REGISTRO_PATH, timeout=30)
+    con.execute("PRAGMA journal_mode=WAL;")
+    return con
+
+def init_registro():
+    con = registro_con()
+    con.executescript("""
+    CREATE TABLE IF NOT EXISTS clienti(
+        azienda_id      TEXT PRIMARY KEY,    -- identificativo tecnico, sta nel nome del file
+        ragione_sociale TEXT NOT NULL,
+        piva            TEXT,
+        chiave_hash     TEXT NOT NULL,       -- impronta, mai la chiave
+        distributore    TEXT,                -- chi lo ha attivato ('' = diretto)
+        attivo          INTEGER NOT NULL DEFAULT 1,
+        scadenza        TEXT,                -- ISO; vuoto = senza scadenza
+        creato          TEXT NOT NULL,
+        ultimo_accesso  TEXT
+    );
+    CREATE INDEX IF NOT EXISTS idx_clienti_chiave ON clienti(chiave_hash);
+    """)
+    con.commit(); con.close()
+
+def db_cliente(azienda_id: str) -> str:
+    """Il file di un cliente. Il nome si ripulisce: un azienda_id storto non
+    deve poter scrivere fuori dalla sua cartella."""
+    pulito = "".join(c for c in str(azienda_id or "") if c.isalnum() or c in "-_").lower()
+    if not pulito:
+        raise HTTPException(400, "azienda non valida")
+    os.makedirs(CLIENTI_DIR, exist_ok=True)
+    return os.path.join(CLIENTI_DIR, pulito + ".db")
+
+def cliente_da_chiave(utente: str, chiave: str):
+    """Torna la riga del cliente se utente+chiave corrispondono, e se e' attivo
+    e non scaduto. Altrimenti None. Nessun messaggio dice QUALE delle tre cose
+    non va: a chi bussa non si spiega come e' fatta la serratura."""
+    if not utente or not chiave:
+        return None
+    con = registro_con()
+    r = con.execute("""SELECT azienda_id,ragione_sociale,piva,chiave_hash,distributore,attivo,scadenza
+                       FROM clienti WHERE azienda_id=?;""", (str(utente).strip().lower(),)).fetchone()
+    if not r:
+        con.close(); return None
+    if not hmac.compare_digest(r[3], _impronta(chiave)):
+        con.close(); return None
+    if not r[5]:
+        con.close(); return None
+    if r[6]:
+        try:
+            if datetime.date.fromisoformat(r[6][:10]) < datetime.date.today():
+                con.close(); return None
+        except Exception:
+            pass
+    try:
+        con.execute("UPDATE clienti SET ultimo_accesso=? WHERE azienda_id=?;",
+                    (datetime.datetime.now().isoformat(timespec="seconds"), r[0]))
+        con.commit()
+    except Exception:
+        pass
+    con.close()
+    return {"azienda_id": r[0], "ragione_sociale": r[1], "piva": r[2],
+            "distributore": r[4], "scadenza": r[6]}
 
 def diagnosi_disco():
     """Dice la verita' su DOVE stiamo scrivendo.
@@ -65,9 +159,52 @@ def diagnosi_disco():
         info["persistenza"] = "OK — disco persistente montato"
     return info
 
+def migra_primo_cliente():
+    """(03set2026) DT Group entra nel registro come cliente numero uno.
+
+    Il suo database viene COPIATO, non spostato: l'originale resta dov'e'. Se
+    qualcosa non torna si riparte da quello, e nessun dato si muove davvero
+    finche' non lo diciamo noi. La copia avviene una volta sola: se il file del
+    cliente esiste gia', non si tocca piu' niente.
+
+    La chiave iniziale e' quella di servizio (SITE_PASSWORD): cosi' dopo il
+    deploy si entra con le credenziali di sempre e non ci si trova chiusi fuori.
+    Va cambiata appena il registro e' in piedi."""
+    az = os.environ.get("AZIENDA_SERVIZIO", "dtgroup")
+    try:
+        con = registro_con()
+        gia = con.execute("SELECT 1 FROM clienti WHERE azienda_id=?;", (az,)).fetchone()
+        if not gia:
+            con.execute("""INSERT INTO clienti(azienda_id,ragione_sociale,piva,chiave_hash,
+                                                distributore,attivo,scadenza,creato)
+                           VALUES(?,?,?,?,?,1,'',?);""",
+                        (az, os.environ.get("AZIENDA_SERVIZIO_NOME", "DT GROUP"),
+                         os.environ.get("AZIENDA_SERVIZIO_PIVA", ""),
+                         _impronta(SITE_PASSWORD or secrets.token_urlsafe(24)), "",
+                         datetime.datetime.now().isoformat(timespec="seconds")))
+            con.commit()
+            print("[REGISTRO] cliente '%s' creato" % az, flush=True)
+        con.close()
+    except Exception as e:
+        print("[REGISTRO] non sono riuscito a creare il primo cliente: %s" % e, flush=True)
+        return
+    try:
+        dest = db_cliente(az)
+        if not os.path.exists(dest) and os.path.exists(DB_PATH):
+            import shutil
+            shutil.copy2(DB_PATH, dest)
+            for coda in ("-wal", "-shm"):
+                if os.path.exists(DB_PATH + coda):
+                    shutil.copy2(DB_PATH + coda, dest + coda)
+            print("[REGISTRO] dati copiati in %s (l'originale resta dov'era)" % dest, flush=True)
+    except Exception as e:
+        print("[REGISTRO] copia dati non riuscita: %s" % e, flush=True)
+
 @asynccontextmanager
 async def lifespan(app):
     init_db()
+    init_registro()
+    migra_primo_cliente()
     yield
 
 app = FastAPI(title="EXPAN Configuratore", version="1.0", lifespan=lifespan)
@@ -79,26 +216,88 @@ app = FastAPI(title="EXPAN Configuratore", version="1.0", lifespan=lifespan)
 SITE_USER     = os.environ.get("SITE_USER", "roberto")
 SITE_PASSWORD = os.environ.get("SITE_PASSWORD", "")   # ← imposta questa su Render per accendere la protezione
 
+# (03set2026) LE CHIAMATE /api/ NON SONO PIU' LIBERE.
+# Prima la password proteggeva solo la PAGINA: chiunque conoscesse l'indirizzo
+# leggeva e scriveva i dati di chiunque, cambiando una parola nel link. Con un
+# cliente solo non c'era nulla da cui separarlo; col secondo diventa una
+# violazione di dati personali — notifica al Garante entro 72 ore.
+#
+# Ora l'identita' si stabilisce QUI, una volta per richiesta, e da essa discende
+# quale database si apre. Nessun endpoint deve piu' preoccuparsene, e nessuno
+# puo' dimenticarsene.
 @app.middleware("http")
 async def porta_a_chiave(request: Request, call_next):
-    if not SITE_PASSWORD:                      # protezione spenta finché non imposti la password
+    _AZIENDA.set(None)
+    percorso = request.url.path
+
+    # L'export verso l'ERP ha la sua chiave (X-API-Key) e la verifica da se':
+    # e' un programma che chiama, non una persona che apre una pagina.
+    if percorso.startswith("/api/export"):
         return await call_next(request)
-    if request.url.path.startswith("/api/"):   # le chiamate dati restano libere: la password protegge la PAGINA (il codice sorgente, servito su "/"), non gli endpoint di salvataggio. Isolamento vero dei dati → arriverà col login per-partner.
+    # La diagnosi resta raggiungibile: serve a sapere se il servizio e' vivo
+    # anche quando l'autenticazione non funziona.
+    if percorso in ("/api/health",):
         return await call_next(request)
+
     auth = request.headers.get("Authorization", "")
-    ok = False
+    utente = chiave = ""
     if auth.startswith("Basic "):
         try:
-            u, _, p = base64.b64decode(auth[6:]).decode("utf-8", "ignore").partition(":")
-            ok = hmac.compare_digest(u, SITE_USER) and hmac.compare_digest(p, SITE_PASSWORD)
+            utente, _, chiave = base64.b64decode(auth[6:]).decode("utf-8", "ignore").partition(":")
         except Exception:
-            ok = False
-    if not ok:
-        return Response(status_code=401, headers={"WWW-Authenticate": 'Basic realm="EXPAN"'})
-    return await call_next(request)
+            utente = chiave = ""
+
+    # ACCESSO DI SERVIZIO: resta valido SEMPRE, anche a registro vuoto o rotto.
+    # E' la rete che impedisce di restare chiusi fuori dal proprio sistema dopo
+    # un deploy. Non e' un privilegio su un cliente: e' la chiave del fabbro.
+    if SITE_PASSWORD and utente and hmac.compare_digest(utente, SITE_USER) \
+       and hmac.compare_digest(chiave, SITE_PASSWORD):
+        _AZIENDA.set(os.environ.get("AZIENDA_SERVIZIO", "dtgroup"))
+        return await call_next(request)
+
+    cli = None
+    try:
+        cli = cliente_da_chiave(utente, chiave)
+    except Exception as e:
+        print("[REGISTRO] non leggibile: %s" % e, flush=True)
+
+    if cli:
+        _AZIENDA.set(cli["azienda_id"])
+        return await call_next(request)
+
+    # Nessuna credenziale valida. Se SITE_PASSWORD non e' impostata E il registro
+    # e' vuoto, il sistema non e' ancora stato configurato: si lascia passare come
+    # prima, altrimenti un'installazione nuova nascerebbe inaccessibile.
+    if not SITE_PASSWORD and _registro_vuoto():
+        _AZIENDA.set("dtgroup")
+        return await call_next(request)
+
+    return Response(status_code=401, headers={"WWW-Authenticate": 'Basic realm="EXPAN"'})
+
+def _registro_vuoto():
+    try:
+        con = registro_con()
+        n = con.execute("SELECT COUNT(*) FROM clienti;").fetchone()[0]
+        con.close(); return n == 0
+    except Exception:
+        return True
 
 # ══════════════════ DB ══════════════════
+def percorso_db():
+    """Quale file si apre in questa richiesta. UNICO punto in cui si decide.
+
+    Fuori da una richiesta (avvio, script, prove) si torna a DB_PATH: cosi'
+    init_db() all'avvio continua a funzionare senza sapere niente di clienti."""
+    az = _AZIENDA.get()
+    if not az:
+        return DB_PATH
+    try:
+        return db_cliente(az)
+    except Exception:
+        return DB_PATH
+
 def get_con():
+    DB_PATH = percorso_db()     # ombreggia il globale: da qui in giu' e' il file del cliente
     d = os.path.dirname(DB_PATH)
     if d:
         try:
@@ -110,10 +309,23 @@ def get_con():
             print("[DB] ATTENZIONE: non riesco a creare la cartella %s: %s" % (d, e), flush=True)
     con = sqlite3.connect(DB_PATH, timeout=30)
     con.execute("PRAGMA journal_mode=WAL;")
+    # Prima apertura di questo file: ci mettiamo lo schema. Il segno si mette
+    # PRIMA di creare, altrimenti _crea_schema — che usa get_con? no, riceve la
+    # connessione — comunque: una volta per file, non a ogni chiamata.
+    if DB_PATH not in _INIZIALIZZATI:
+        _INIZIALIZZATI.add(DB_PATH)
+        try:
+            _crea_schema(con)
+        except Exception as e:
+            _INIZIALIZZATI.discard(DB_PATH)
+            print("[DB] schema non creato su %s: %s" % (DB_PATH, e), flush=True)
     return con
 
-def init_db():
-    con = get_con()
+_INIZIALIZZATI = set()
+
+def _crea_schema(con):
+    """Crea le tabelle se mancano. Vale per il file di QUALSIASI cliente: un
+    cliente nuovo nasce con lo stesso schema di tutti, senza passaggi manuali."""
     con.executescript("""
     CREATE TABLE IF NOT EXISTS contatori(
         chiave TEXT PRIMARY KEY, anno INTEGER NOT NULL, valore INTEGER NOT NULL);
@@ -194,7 +406,10 @@ def init_db():
                           ("passata_il", "TEXT")):
         if colonna not in esistenti:
             con.execute("ALTER TABLE offerte ADD COLUMN %s %s;" % (colonna, tipo))
-    con.commit(); con.close()
+    con.commit()
+
+def init_db():
+    con = get_con(); _crea_schema(con); con.close()
 
 # ══════════════════ NUMERAZIONE ATOMICA (cuore già testato) ══════════════════
 def assegna_numero(con, cliente_cod, creata_da, payload):
@@ -320,6 +535,7 @@ def leggi_offerta(numero: str):
 
 @app.get("/api/anagrafica")
 def leggi_anagrafica(azienda: str = "default", tipi: str = None, indice: int = 0):
+    azienda = risolvi_azienda(azienda)   # (03set2026) il punto unico, mai il parametro grezzo
     """Le tabelle dell'azienda (fornitori, costi, listini...). Nessun dato e' nel motore:
     se l'azienda non ha ancora caricato niente, torna vuoto.
 
@@ -393,7 +609,7 @@ def leggi_anagrafica(azienda: str = "default", tipi: str = None, indice: int = 0
 @app.post("/api/anagrafica/{tipo}")
 def scrivi_anagrafica(tipo: str, body: dict = Body(...)):
     """Sostituisce una tabella dell'azienda (import dagli Excel del cliente)."""
-    azienda = body.get("azienda") or "default"
+    azienda = risolvi_azienda(body.get("azienda"))
     righe = body.get("righe")
     if not isinstance(righe, list):
         raise HTTPException(400, "serve 'righe': [...]")
@@ -406,6 +622,7 @@ def scrivi_anagrafica(tipo: str, body: dict = Body(...)):
 
 @app.delete("/api/anagrafica/{tipo}")
 def cancella_anagrafica(tipo: str, azienda: str = "default"):
+    azienda = risolvi_azienda(azienda)
     con = get_con()
     con.execute("DELETE FROM anagrafica WHERE azienda_id=? AND tipo=?;", (azienda, tipo))
     con.commit(); con.close()
@@ -446,11 +663,15 @@ TABELLE_ERP    = ("clienti", "fornitori")
 def risolvi_azienda(param: str = "default") -> str:
     """UNICO punto in cui si decide di quale azienda stiamo parlando.
 
-    Oggi restituisce il parametro cosi' com'e': c'e' un cliente solo e la porta
-    e' quella di sempre. Domani, col registro distributori, l'azienda si ricavera'
-    da CHI E' ENTRATO e non da cosa c'e' scritto nell'indirizzo — e cambiera'
-    solo questa funzione, non i venti endpoint che la chiamano.
-    Finche' resta cosi', l'azienda nell'URL NON e' una misura di sicurezza."""
+    (03set2026) ORA LEGGE CHI E' ENTRATO, NON L'INDIRIZZO. Il parametro 'azienda'
+    negli URL resta accettato per non rompere le chiamate esistenti, ma NON viene
+    piu' usato per scegliere i dati: ognuno lavora dentro il proprio file, e
+    scrivere il nome di un altro nell'indirizzo non porta da nessuna parte.
+
+    Dentro il file di un cliente le righe restano marcate 'default': non serve
+    distinguerle, perche' li' dentro c'e' un cliente solo."""
+    if _AZIENDA.get():
+        return "default"
     return (param or "default").strip() or "default"
 
 def _leggi_tabella(con, azienda, tipo):
@@ -1338,6 +1559,97 @@ async def ai_ask(request: Request):
 
     # il configuratore legge d.text come JSON: lo restituisco sia grezzo sia annidato in 'text'
     return {"ok": True, "text": json.dumps(definizione, ensure_ascii=False), **definizione}
+
+# ══════════════════ GESTIONE CLIENTI (solo accesso di servizio) ══════════════════
+def _sono_servizio(x_api_key, request: Request = None):
+    """Queste rotte le usa SOLO chi ha la chiave di servizio. Un cliente non
+    deve poter vedere l'elenco degli altri clienti — nemmeno i loro nomi."""
+    return bool(SITE_PASSWORD) and x_api_key == SITE_PASSWORD
+
+@app.get("/api/clienti")
+def clienti_elenco(x_api_key: str = Header(None)):
+    """Chi c'e', chi lo ha attivato, se e' attivo, quando e' entrato l'ultima
+    volta. Le chiavi non compaiono: nel registro c'e' solo la loro impronta."""
+    if not _sono_servizio(x_api_key):
+        raise HTTPException(401, "chiave non valida")
+    con = registro_con()
+    righe = con.execute("""SELECT azienda_id,ragione_sociale,piva,distributore,attivo,
+                                  scadenza,creato,ultimo_accesso FROM clienti ORDER BY creato;""").fetchall()
+    con.close()
+    fuori = []
+    for r in righe:
+        try:
+            peso = os.path.getsize(db_cliente(r[0]))
+        except Exception:
+            peso = 0
+        fuori.append({"azienda_id": r[0], "ragione_sociale": r[1], "piva": r[2],
+                      "distributore": r[3] or "(diretto)", "attivo": bool(r[4]),
+                      "scadenza": r[5] or "(senza scadenza)", "creato": r[6],
+                      "ultimo_accesso": r[7], "byte_dati": peso})
+    return {"conteggio": len(fuori), "clienti": fuori}
+
+@app.post("/api/clienti")
+def cliente_crea(body: dict = Body(...), x_api_key: str = Header(None)):
+    """Attiva un cliente. Body: {azienda_id, ragione_sociale, piva, distributore, scadenza}
+
+    La chiave viene GENERATA qui e restituita UNA VOLTA SOLA: nel registro resta
+    solo la sua impronta, quindi non e' piu' recuperabile. Se si perde, se ne fa
+    una nuova — non si va a leggerla da nessuna parte."""
+    if not _sono_servizio(x_api_key):
+        raise HTTPException(401, "chiave non valida")
+    az = "".join(c for c in str(body.get("azienda_id") or "").lower()
+                 if c.isalnum() or c in "-_")
+    rs = str(body.get("ragione_sociale") or "").strip()
+    if not az or not rs:
+        raise HTTPException(400, "servono 'azienda_id' e 'ragione_sociale'")
+    piva = str(body.get("piva") or "").strip()
+    if piva:
+        valida, perche, norm = controlla_piva(piva, body.get("paese") or "IT")
+        if not valida:
+            raise HTTPException(400, "partita IVA: %s" % perche)
+        piva = norm or piva
+    chiave = "MTR-" + secrets.token_urlsafe(18)
+    con = registro_con()
+    if con.execute("SELECT 1 FROM clienti WHERE azienda_id=?;", (az,)).fetchone():
+        con.close(); raise HTTPException(409, "esiste gia' un cliente con questo identificativo")
+    con.execute("""INSERT INTO clienti(azienda_id,ragione_sociale,piva,chiave_hash,
+                                        distributore,attivo,scadenza,creato)
+                   VALUES(?,?,?,?,?,1,?,?);""",
+                (az, rs, piva, _impronta(chiave), str(body.get("distributore") or ""),
+                 str(body.get("scadenza") or ""),
+                 datetime.datetime.now().isoformat(timespec="seconds")))
+    con.commit(); con.close()
+    con2 = sqlite3.connect(db_cliente(az), timeout=30)
+    con2.execute("PRAGMA journal_mode=WAL;"); _crea_schema(con2); con2.close()
+    return {"azienda_id": az, "ragione_sociale": rs, "utente": az, "chiave": chiave,
+            "avvertenza": "questa chiave non e' piu' recuperabile: consegnala adesso"}
+
+@app.patch("/api/clienti/{azienda_id}")
+def cliente_modifica(azienda_id: str, body: dict = Body(...), x_api_key: str = Header(None)):
+    """Sospende, riattiva, cambia scadenza, o rigenera la chiave.
+    Body: {attivo, scadenza, nuova_chiave: true}"""
+    if not _sono_servizio(x_api_key):
+        raise HTTPException(401, "chiave non valida")
+    con = registro_con()
+    if not con.execute("SELECT 1 FROM clienti WHERE azienda_id=?;", (azienda_id,)).fetchone():
+        con.close(); raise HTTPException(404, "cliente non trovato")
+    fuori = {"azienda_id": azienda_id}
+    if "attivo" in body:
+        con.execute("UPDATE clienti SET attivo=? WHERE azienda_id=?;",
+                    (1 if body["attivo"] else 0, azienda_id))
+        fuori["attivo"] = bool(body["attivo"])
+    if "scadenza" in body:
+        con.execute("UPDATE clienti SET scadenza=? WHERE azienda_id=?;",
+                    (str(body["scadenza"] or ""), azienda_id))
+        fuori["scadenza"] = str(body["scadenza"] or "(senza scadenza)")
+    if body.get("nuova_chiave"):
+        ch = "MTR-" + secrets.token_urlsafe(18)
+        con.execute("UPDATE clienti SET chiave_hash=? WHERE azienda_id=?;",
+                    (_impronta(ch), azienda_id))
+        fuori["chiave"] = ch
+        fuori["avvertenza"] = "la chiave precedente non funziona piu'"
+    con.commit(); con.close()
+    return fuori
 
 # ══════════════════ FRONT-END STATICO ══════════════════
 DATI_FILE = os.environ.get("DATI_FILE", "dati_azienda.html")
