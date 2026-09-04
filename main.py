@@ -581,9 +581,10 @@ def leggi_anagrafica(azienda: str = "default", tipi: str = None, indice: int = 0
             if t in TABELLE_NOSTRE:  return "nostre"
             if t in TABELLE_ERP:     return "erp"
             return "motore"
-        return {"azienda": azienda,
+        return {"azienda": azienda, "colonne": COLONNE,
                 "tabelle": [{"tipo": r[0], "byte": r[1], "aggiornato": r[2],
-                             "righe": r[3], "gruppo": gruppo(r[0])} for r in rows]}
+                             "righe": r[3], "gruppo": gruppo(r[0]),
+                             "colonne": COLONNE.get(r[0])} for r in rows]}
 
     # MODO SELETTIVO: solo le tabelle chieste. I nomi non entrano mai nella query
     # come testo, solo come parametri: si costruiscono i segnaposto, non i valori.
@@ -648,6 +649,32 @@ def cancella_anagrafica(tipo: str, azienda: str = "default"):
 # Quali tabelle sono NOSTRE (si scrivono) e quali arrivano dall'ERP (sola lettura).
 # La console mostra questa divisione; qui e' il server a farla rispettare, perche'
 # una regola che vive solo nell'interfaccia non e' una regola.
+# (04set2026) LE COLONNE CHE UNA TABELLA DEVE AVERE.
+# Fin qui l'elenco viveva solo dentro il configuratore, e la console /dati
+# disegnava le colonne guardando i dati: una colonna appena aggiunta al
+# programma non compariva finche' qualcuno non le dava un valore — e non poteva
+# darglielo, perche' la colonna non c'era. Il cane che si morde la coda.
+# Ora l'elenco sta qui, e lo leggono tutti e due.
+COLONNE = {
+ "clienti":       ["codice","ragione_sociale","indirizzo","pagamento","piva"],
+ "fornitori":     ["cliente","materiale","fornitore"],
+ "materiali":     ["materiale","cod_erp","descrizione","um","um_acquisto","densita","natura",
+                   "costo_kg","costo_pz","scarto","lotto_minimo","giorni_consegna","listino","fornitore"],
+ "blocchi":       ["materiale","fornitore","dim1","dim2","spessore","listino"],
+ "costi":         ["materiale","fornitore","costoBlocco","lamine"],
+ "listini":       ["cliente","agente","ricarico","provvigione","provv_base",
+                   "km_trasporto","euro_km","mc_camion","riempimento","arrotonda"],
+ "modelli":       ["nome","da","cliente","data","stato","riservato","descr"],
+ "lavorazioni":   ["lavorazione","costo_min_macchina","costo_min_uomo","operatori","divisore_pezzi","nota"],
+ "composizione":  ["prodotto","se","strati","campi","nota"],
+ "caratteristiche":["prodotto","famiglia","primarie","tecnologia","sfoderabile","imballo",
+                   "traspirazione","differenziato"],
+ "intervista":    ["ordine","prodotto","domanda","campo","tipo","opzioni","se","nota"],
+ "regole":        ["cliente","prodotto","regola","nota"],
+ "clienti_nuovi": ["codice","ragione_sociale","piva","paese","indirizzo","pagamento","zona",
+                   "stato","cod_erp","creato","creato_da"],
+}
+
 TABELLE_NOSTRE = ("materiali", "blocchi", "costi", "lavorazioni",
                   "composizione", "caratteristiche", "regole", "intervista",
                   "clienti_nuovi",
