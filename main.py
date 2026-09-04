@@ -673,9 +673,19 @@ COLONNE = {
  "regole":        ["cliente","prodotto","regola","nota"],
  "clienti_nuovi": ["codice","ragione_sociale","piva","paese","indirizzo","pagamento","zona",
                    "stato","cod_erp","creato","creato_da"],
+ # (04set2026) IL GRADINO CHE MANCAVA: I VALORI DELL'AZIENDA.
+ # Il costo al chilometro, il volume del camion, la base della provvigione non
+ # sono del singolo cliente: sono dell'azienda. Finche' vivevano solo sulla riga
+ # di listino, portare il carburante da 2 a 3 euro voleva dire aprire e
+ # correggere ogni cliente — e chi veniva dimenticato quotava su un costo
+ # vecchio, senza che nessuno se ne accorgesse.
+ # Adesso valgono per tutti da un posto solo. Il listino del cliente li
+ # sovrascrive SOLO dove ha un accordo suo: e' la stessa gerarchia del «*» che
+ # i listini gia' usano, con il gradino sopra che prima non c'era.
+ "azienda":       ["parametro","valore","nota"],
 }
 
-TABELLE_NOSTRE = ("materiali", "blocchi", "costi", "lavorazioni",
+TABELLE_NOSTRE = ("azienda", "materiali", "blocchi", "costi", "lavorazioni",
                   "composizione", "caratteristiche", "regole", "intervista",
                   "clienti_nuovi",
                   # (28ago2026) LISTINI era classificata come tabella dell'ERP, per
